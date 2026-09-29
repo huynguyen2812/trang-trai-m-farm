@@ -1,0 +1,102 @@
+:root {
+  --soil: #1c1916;
+  --ink: #292524;
+  --cream: #f4efe4;
+  --paper: #fffaf1;
+  --leaf: #3d6b38;
+  --leaf-2: #2f552b;
+  --clay: #b4532a;
+  --line: #e7dfd0;
+  --mute: #78716c;
+  --ok: #166534;
+  --warn: #9a3412;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--cream); color: var(--ink); }
+body {
+  font-family: "Be Vietnam Pro", system-ui, sans-serif;
+  min-height: 100vh;
+}
+button, input, select { font: inherit; }
+a { color: inherit; }
+img { max-width: 100%; display: block; }
+
+.top {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px; position: sticky; top: 0; z-index: 20;
+  background: rgba(244,239,228,.92); backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.brand { font-family: Fraunces, Georgia, serif; font-weight: 600; letter-spacing: -.02em; }
+.brand b { color: var(--leaf-2); }
+.nav { display: flex; gap: 8px; flex-wrap: wrap; }
+.nav a, .nav button, .btn {
+  border: 1px solid var(--line); background: var(--paper);
+  padding: 8px 12px; border-radius: 999px; cursor: pointer; text-decoration: none;
+}
+.btn-solid { background: var(--soil); color: #fff; border-color: var(--soil); }
+.btn-leaf { background: var(--leaf); color: #fff; border-color: var(--leaf); }
+.btn-clay { background: var(--clay); color: #fff; border-color: var(--clay); }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+
+.wrap { max-width: 980px; margin: 0 auto; padding: 24px 20px 80px; }
+.hero h1 {
+  font-family: Fraunces, Georgia, serif;
+  font-size: clamp(32px, 6vw, 58px);
+  line-height: 1.05; margin: 12px 0 12px;
+}
+.lede { font-size: 18px; max-width: 38rem; color: #44403c; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px; }
+.grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.card {
+  background: var(--paper); border: 1px solid var(--line);
+  border-radius: 18px; overflow: hidden;
+}
+.card .ph { height: 150px; background: #d6d3d1 center/cover no-repeat; }
+.card .bd { padding: 14px 16px 16px; }
+.k { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
+.h { font-family: Fraunces, Georgia, serif; font-size: 22px; margin: 4px 0 8px; }
+.pill {
+  display: inline-block; font-size: 12px; padding: 3px 8px; border-radius: 999px;
+  background: #ecfdf3; color: var(--ok); border: 1px solid #bbf7d0;
+}
+.pill.due { background: #fff7ed; color: var(--warn); border-color: #fed7aa; }
+.pill.open { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+.muted { color: var(--mute); font-size: 14px; }
+.notice {
+  background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412;
+  padding: 10px 12px; border-radius: 12px; font-size: 14px;
+}
+.okbox {
+  background: #ecfdf3; border: 1px solid #bbf7d0; color: #166534;
+  padding: 10px 12px; border-radius: 12px; font-size: 14px;
+}
+label { display: block; font-size: 13px; margin: 12px 0 6px; color: #57534e; }
+input {
+  width: 100%; padding: 12px 14px; border-radius: 12px;
+  border: 1px solid var(--line); background: #fff;
+}
+.panel { background: var(--paper); border: 1px solid var(--line); border-radius: 20px; padding: 22px; }
+.timeline { border-left: 2px solid var(--line); margin-left: 8px; padding-left: 16px; }
+.titem { margin: 0 0 16px; }
+.titem strong { display: block; }
+.med { color: var(--warn); font-size: 12px; }
+.split { display: grid; gap: 16px; }
+@media (min-width: 800px) { .split-2 { grid-template-columns: 1.1fr .9fr; } }
+.price { font-family: Fraunces, Georgia, serif; font-size: 28px; }
+.foot { margin-top: 40px; color: var(--mute); font-size: 13px; }
+.hide { display: none; }
+.err { color: #b91c1c; font-size: 13px; min-height: 1.2em; }
+.google {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.demo-acc { font-size: 13px; background: #f5f5f4; border-radius: 12px; padding: 10px 12px; }
+.demo-acc button { margin: 4px 4px 0 0; }
+.sheet {
+  position: fixed; inset: 0; background: rgba(28,25,22,.45);
+  display: flex; align-items: flex-end; justify-content: center; z-index: 40;
+}
+.sheet .in {
+  background: var(--paper); width: min(480px, 100%);
+  border-radius: 20px 20px 0 0; padding: 20px; max-height: 80vh; overflow: auto;
+}
