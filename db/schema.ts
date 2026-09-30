@@ -120,6 +120,27 @@ export const logImages = sqliteTable(
     index("log_images_asset").on(t.tenant, t.asset_id, t.created_at),
   ],
 );
+export const vaccinations = sqliteTable(
+  "vaccinations",
+  {
+    tenant: tenant(),
+    id: text("id").notNull(),
+    asset_id: text("asset_id").notNull(),
+    vaccine_name: text("vaccine_name").notNull(),
+    dose_label: text("dose_label").notNull(),
+    administered_at: text("administered_at").notNull(),
+    next_due_at: text("next_due_at"),
+    batch_number: text("batch_number").notNull(),
+    provider: text("provider").notNull(),
+    note: text("note").notNull(),
+    created_at: text("created_at").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenant, t.id] }),
+    index("vaccinations_asset").on(t.tenant, t.asset_id, t.administered_at),
+    index("vaccinations_due").on(t.tenant, t.next_due_at),
+  ],
+);
 export const requests = sqliteTable(
   "requests",
   {

@@ -23,6 +23,7 @@ import {
   Settings2,
   Camera,
   X,
+  Syringe,
 } from "lucide-react";
 import {
   Sidebar,
@@ -668,6 +669,42 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
           type: "images",
           wide: true,
         },
+      ],
+    });
+  }
+  function vaccinationForm(assetId?: string) {
+    setForm({
+      title: "Ghi nhận mũi tiêm",
+      description:
+        "Lưu đúng tên vaccine, mũi tiêm và ngày nhắc để chủ trại và khách hàng cùng theo dõi.",
+      action: "addVaccination",
+      values: {
+        asset_id: assetId || "",
+        vaccine_name: "",
+        dose_label: "Mũi 1",
+        administered_at: isoDay(),
+        next_due_at: "",
+        batch_number: "",
+        provider: "",
+        note: "",
+      },
+      fields: [
+        {
+          key: "asset_id",
+          label: "Vật nuôi",
+          type: "select",
+          options: data?.assets
+            .filter((asset) => asset.kind === "animal")
+            .map((asset) => [asset.id, `${asset.id} · ${asset.name}`]),
+          disabled: !!assetId,
+        },
+        { key: "vaccine_name", label: "Tên vaccine", wide: true },
+        { key: "dose_label", label: "Mũi tiêm" },
+        { key: "administered_at", label: "Ngày tiêm", type: "date" },
+        { key: "next_due_at", label: "Ngày nhắc tiếp theo", type: "date", required: false },
+        { key: "batch_number", label: "Số lô vaccine", required: false },
+        { key: "provider", label: "Người / đơn vị thực hiện", required: false, wide: true },
+        { key: "note", label: "Ghi chú sau tiêm", type: "textarea", required: false, wide: true, max: 2000 },
       ],
     });
   }
@@ -1655,6 +1692,9 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
               <Tabs defaultValue="history" className="section-tabs">
                 <TabsList>
                   <TabsTrigger value="history">Nhật ký</TabsTrigger>
+                  {a.kind === "animal" && (
+                    <TabsTrigger value="vaccination">Tiêm ngừa</TabsTrigger>
+                  )}
                   <TabsTrigger value="agreement">Đơn & điều kiện</TabsTrigger>
                   <TabsTrigger value="qr">Mã QR</TabsTrigger>
                 </TabsList>
@@ -1670,6 +1710,41 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
                     </button>
                   )}
                 </TabsContent>
+                {a.kind === "animal" && (
+                  <TabsContent value="vaccination">
+                    <div className="vaccination-list">
+                      {data.vaccinations
+                        .filter((item) => item.asset_id === a.id)
+                        .map((item) => {
+                          const due = item.next_due_at && Date.parse(item.next_due_at) <= Date.now() + 14 * 86400000;
+                          return (
+                            <article key={item.id} className="vaccination-card">
+                              <div className="vaccination-icon"><Syringe size={20} /></div>
+                              <div>
+                                <div className="actions">
+                                  <strong>{item.vaccine_name}</strong>
+                                  {due && <span className="badge status-warn">Sắp đến hạn</span>}
+                                </div>
+                                <p>{item.dose_label} · Tiêm ngày {date(item.administered_at)}</p>
+                                {item.next_due_at && <p><strong>Nhắc tiếp:</strong> {date(item.next_due_at)}</p>}
+                                {item.batch_number && <p>Số lô: {item.batch_number}</p>}
+                                {item.provider && <p>Thực hiện: {item.provider}</p>}
+                                {item.note && <p className="muted">{item.note}</p>}
+                              </div>
+                            </article>
+                          );
+                        })}
+                      {!data.vaccinations.some((item) => item.asset_id === a.id) && (
+                        <div className="empty-inline">Chưa có dữ liệu tiêm ngừa.</div>
+                      )}
+                    </div>
+                    {isAdmin && (
+                      <button className="button" onClick={() => vaccinationForm(a.id)}>
+                        <Syringe size={16} /> Ghi nhận mũi tiêm
+                      </button>
+                    )}
+                  </TabsContent>
+                )}
                 <TabsContent value="agreement">
                   {data.orders
                     .filter((o) => o.asset_id === a.id)

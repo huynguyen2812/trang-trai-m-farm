@@ -11,6 +11,7 @@ const updateKinds = [
   ["health", "Sức khỏe"],
   ["food", "Thức ăn"],
   ["medicine", "Thuốc"],
+  ["vaccination", "Tiêm ngừa"],
   ["care", "Chăm sóc"],
   ["fertilizer", "Phân bón"],
   ["flowering", "Ra hoa"],
@@ -79,6 +80,7 @@ export function QuickFarmUpdate() {
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState(false);
+  const [vaccine, setVaccine] = useState({ name: "", dose: "Mũi 1", next: "", batch: "", provider: "" });
   const [draft, setDraft] = useState({ id: "", name: "", species: "", kind: "animal", location: "" });
 
   useEffect(() => {
@@ -96,13 +98,33 @@ export function QuickFarmUpdate() {
   function reset() {
     setSelected(""); setKind("growth"); setMetric(""); setNote(""); setFiles([]); setCreated(false);
     setDraft({ id: "", name: "", species: "", kind: "animal", location: "" });
+    setVaccine({ name: "", dose: "Mũi 1", next: "", batch: "", provider: "" });
   }
 
   async function submitUpdate() {
     if (!asset) return;
     setBusy(true);
     try {
-      await saveUpdate(asset, kind, metric, note, files);
+      if (kind === "vaccination") {
+        if (!vaccine.name.trim()) throw new Error("Nhập tên vaccine.");
+        await api("/api/app", {
+          action: "addVaccination",
+          data: {
+            asset_id: asset.id,
+            vaccine_name: vaccine.name,
+            dose_label: vaccine.dose,
+            administered_at: today(),
+            next_due_at: vaccine.next,
+            batch_number: vaccine.batch,
+            provider: vaccine.provider,
+            note,
+          },
+        });
+        if (files.length)
+          await saveUpdate(asset, "medicine", metric, note || `Ảnh ghi nhận tiêm ${vaccine.name}.`, files);
+      } else {
+        await saveUpdate(asset, kind, metric, note, files);
+      }
       setCreated(true);
     } catch (error) { toast.error((error as Error).message); }
     finally { setBusy(false); }
@@ -169,7 +191,16 @@ export function QuickFarmUpdate() {
               <PhotoPicker files={files} onChange={setFiles} />
               <section className="quick-card">
                 <h2>Hôm nay cập nhật gì?</h2>
-                <div className="quick-kind-grid">{updateKinds.map(([value, label]) => <button key={value} className={kind === value ? "active" : ""} onClick={() => setKind(value)}>{label}</button>)}</div>
+                <div className="quick-kind-grid">{updateKinds.filter(([value]) => asset.kind === "animal" || value !== "vaccination").map(([value, label]) => <button key={value} className={kind === value ? "active" : ""} onClick={() => setKind(value)}>{label}</button>)}</div>
+                {kind === "vaccination" && (
+                  <div className="quick-vaccine-fields">
+                    <label className="field"><span>Tên vaccine</span><input value={vaccine.name} onChange={(e) => setVaccine({ ...vaccine, name: e.target.value })} placeholder="Ví dụ: Newcastle" /></label>
+                    <label className="field"><span>Mũi tiêm</span><input value={vaccine.dose} onChange={(e) => setVaccine({ ...vaccine, dose: e.target.value })} placeholder="Mũi 1" /></label>
+                    <label className="field"><span>Ngày nhắc tiếp theo</span><input type="date" value={vaccine.next} onChange={(e) => setVaccine({ ...vaccine, next: e.target.value })} /></label>
+                    <label className="field"><span>Số lô</span><input value={vaccine.batch} onChange={(e) => setVaccine({ ...vaccine, batch: e.target.value })} /></label>
+                    <label className="field"><span>Người / đơn vị thực hiện</span><input value={vaccine.provider} onChange={(e) => setVaccine({ ...vaccine, provider: e.target.value })} /></label>
+                  </div>
+                )}
                 <label className="field"><span>Chỉ số (không bắt buộc)</span><input value={metric} onChange={(e) => setMetric(e.target.value)} placeholder="Ví dụ: 0,92 kg hoặc cao 1,5 m" /></label>
                 <label className="field"><span>Ghi chú ngắn</span><textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Tình hình và việc đã làm…" maxLength={5000} /></label>
               </section>

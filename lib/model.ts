@@ -64,6 +64,18 @@ export type LogImage = {
   byte_size: number;
   created_at: string;
 };
+export type Vaccination = {
+  id: string;
+  asset_id: string;
+  vaccine_name: string;
+  dose_label: string;
+  administered_at: string;
+  next_due_at: string | null;
+  batch_number: string;
+  provider: string;
+  note: string;
+  created_at: string;
+};
 export type RequestItem = {
   id: string;
   asset_id: string;
@@ -87,6 +99,7 @@ export type State = {
   orders: Order[];
   logs: Log[];
   log_images: LogImage[];
+  vaccinations: Vaccination[];
   requests: RequestItem[];
 };
 export const money = (v: number) =>

@@ -1205,6 +1205,11 @@ footer > span {
 .quick-kind-grid button { min-height: 44px; padding: 8px; border: 1px solid var(--border); border-radius: 10px; background: white; color: #52695b; font-weight: 700; }
 .quick-kind-grid button.active { border-color: var(--primary); background: #e6efe6; color: var(--primary); }
 .quick-new-form .field + .field { margin-top: 12px; }
+.quick-vaccine-fields { display: grid; gap: 12px; padding: 14px; margin-bottom: 16px; border-radius: 12px; background: #f0f5ef; }
+.vaccination-list { display: grid; gap: 10px; margin: 18px 0; }
+.vaccination-card { display: grid; grid-template-columns: 42px 1fr; gap: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: #f9fbf9; }
+.vaccination-card p { margin-top: 5px; font-size: 14px; }
+.vaccination-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; background: #dfece1; color: var(--primary); }
 .quick-save { position: fixed; left: 50%; bottom: 18px; width: min(calc(100% - 32px), 488px); min-height: 56px; transform: translateX(-50%); box-shadow: 0 8px 24px rgba(17,61,43,.25); z-index: 5; }
 .quick-save:hover { transform: translateX(-50%) translateY(-1px); }
 .quick-success { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 16px; padding-bottom: 30px; }

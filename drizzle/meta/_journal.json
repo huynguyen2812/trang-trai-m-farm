@@ -15,6 +15,13 @@
       "when": 1790753897452,
       "tag": "0001_chemical_marrow",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790760377118,
+      "tag": "0002_wealthy_king_cobra",
+      "breakpoints": true
     }
   ]
 }

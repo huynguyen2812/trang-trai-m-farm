@@ -223,7 +223,7 @@ export function admin(a: Actor) {
 export async function snapshot(a: Actor) {
   const customer = a.role === "customer";
   const values = customer ? [a.tenant, a.id] : [a.tenant];
-  const [assets, packages, customers, orders, logs, log_images, requests] =
+  const [assets, packages, customers, orders, logs, log_images, vaccinations, requests] =
     await Promise.all([
       rows(
         `SELECT * FROM assets WHERE tenant=? ${customer ? "AND customer_id=?" : ""} ORDER BY id`,
@@ -250,11 +250,15 @@ export async function snapshot(a: Actor) {
         ...values,
       ),
       rows(
+        `SELECT v.* FROM vaccinations v WHERE v.tenant=? ${customer ? "AND EXISTS (SELECT 1 FROM assets a WHERE a.tenant=v.tenant AND a.id=v.asset_id AND a.customer_id=?)" : ""} ORDER BY administered_at DESC,created_at DESC`,
+        ...values,
+      ),
+      rows(
         `SELECT * FROM requests WHERE tenant=? ${customer ? "AND customer_id=?" : ""} ORDER BY created_at DESC`,
         ...values,
       ),
     ]);
-  return { actor: a, assets, packages, customers, orders, logs, log_images, requests };
+  return { actor: a, assets, packages, customers, orders, logs, log_images, vaccinations, requests };
 }
 export async function seedDemo(tenant: string) {
   const started = new Date(Date.now() - 47 * 86400000).toISOString();
@@ -570,6 +574,42 @@ export async function mutate(a: Actor, input: any) {
         x.metric,
         x.image_url,
         now(),
+      ).run();
+      return id;
+    }
+    case "addVaccination": {
+      admin(a);
+      const x = z.object({
+        asset_id: text,
+        vaccine_name: text,
+        dose_label: z.string().trim().min(1).max(100),
+        administered_at: day,
+        next_due_at: z.string().optional().default("").refine((s) => !s || !Number.isNaN(Date.parse(s)), "Ngày nhắc không hợp lệ."),
+        batch_number: z.string().trim().max(100).default(""),
+        provider: z.string().trim().max(200).default(""),
+        note: z.string().trim().max(2000).default(""),
+      }).parse(input.data);
+      const asset = await first<{ id: string; kind: string }>(
+        "SELECT id,kind FROM assets WHERE tenant=? AND id=?",
+        t,
+        x.asset_id,
+      );
+      if (!asset) throw new ApiError(404, "Không tìm thấy vật nuôi.");
+      if (asset.kind !== "animal")
+        throw new ApiError(400, "Hồ sơ tiêm ngừa chỉ áp dụng cho vật nuôi.");
+      if (x.next_due_at && Date.parse(x.next_due_at) < Date.parse(x.administered_at))
+        throw new ApiError(400, "Ngày nhắc tiếp theo phải sau ngày tiêm.");
+      const id = newId("TN");
+      await statement(
+        "INSERT INTO vaccinations (tenant,id,asset_id,vaccine_name,dose_label,administered_at,next_due_at,batch_number,provider,note,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        t, id, x.asset_id, x.vaccine_name, x.dose_label, x.administered_at,
+        x.next_due_at || null, x.batch_number, x.provider, x.note, now(),
+      ).run();
+      await statement(
+        "INSERT INTO logs (tenant,id,asset_id,title,body,kind,metric,image_url,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+        t, newId("NK"), x.asset_id, `Tiêm ngừa · ${x.vaccine_name}`,
+        [x.dose_label, x.provider && `Thực hiện bởi: ${x.provider}`, x.note].filter(Boolean).join("\n"),
+        "medicine", x.next_due_at ? `Nhắc lại: ${x.next_due_at}` : "Đã hoàn thành", "", now(),
       ).run();
       return id;
     }
