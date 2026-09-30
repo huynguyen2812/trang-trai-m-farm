@@ -1210,6 +1210,14 @@ footer > span {
 .vaccination-card { display: grid; grid-template-columns: 42px 1fr; gap: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: #f9fbf9; }
 .vaccination-card p { margin-top: 5px; font-size: 14px; }
 .vaccination-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; background: #dfece1; color: var(--primary); }
+.identifier-list { display: grid; gap: 10px; margin: 18px 0; }
+.identifier-card { display: grid; grid-template-columns: 88px 1fr; gap: 14px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: #f9fbf9; }
+.identifier-code { min-height: 58px; display: grid; place-items: center; padding: 8px; border-radius: 9px; background: var(--primary); color: white; font-weight: 900; word-break: break-all; text-align: center; }
+.identifier-card p { margin-top: 5px; font-size: 14px; }
+.identifier-actions { display: flex; gap: 8px; margin-top: 10px; }
+.identifier-actions button { padding: 6px 10px; border: 1px solid #c5d2ca; border-radius: 7px; background: white; color: var(--primary); font-size: 13px; font-weight: 700; }
+.quick-identifier-fields { display: grid; gap: 12px; padding: 14px; margin-top: 16px; border-radius: 12px; background: #f0f5ef; }
+.quick-identifier-fields h3 { font-size: 16px; }
 .quick-save { position: fixed; left: 50%; bottom: 18px; width: min(calc(100% - 32px), 488px); min-height: 56px; transform: translateX(-50%); box-shadow: 0 8px 24px rgba(17,61,43,.25); z-index: 5; }
 .quick-save:hover { transform: translateX(-50%) translateY(-1px); }
 .quick-success { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 16px; padding-bottom: 30px; }

@@ -81,6 +81,7 @@ export function QuickFarmUpdate() {
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState(false);
   const [vaccine, setVaccine] = useState({ name: "", dose: "Mũi 1", next: "", batch: "", provider: "" });
+  const [identifier, setIdentifier] = useState({ type: "leg_band", code: "", electronic: "", placement: "Vòng chân" });
   const [draft, setDraft] = useState({ id: "", name: "", species: "", kind: "animal", location: "" });
 
   useEffect(() => {
@@ -99,6 +100,7 @@ export function QuickFarmUpdate() {
     setSelected(""); setKind("growth"); setMetric(""); setNote(""); setFiles([]); setCreated(false);
     setDraft({ id: "", name: "", species: "", kind: "animal", location: "" });
     setVaccine({ name: "", dose: "Mũi 1", next: "", batch: "", provider: "" });
+    setIdentifier({ type: "leg_band", code: "", electronic: "", placement: "Vòng chân" });
   }
 
   async function submitUpdate() {
@@ -147,6 +149,19 @@ export function QuickFarmUpdate() {
         expected_at: future(draft.kind === "plant" ? 180 : 120),
       };
       await api("/api/app", { action: "saveAsset", data });
+      if (draft.kind === "animal" && identifier.code.trim())
+        await api("/api/app", {
+          action: "addAssetIdentifier",
+          data: {
+            asset_id: data.id,
+            identifier_type: identifier.type,
+            visible_code: identifier.code.trim(),
+            electronic_code: identifier.electronic.trim(),
+            placement: identifier.placement.trim() || "Gắn ngoài",
+            attached_at: today(),
+            note: "Gắn khi tạo hồ sơ trên điện thoại.",
+          },
+        });
       if (files.length) await saveUpdate(data as Asset, "growth", metric, note || "Ghi nhận hình ảnh ban đầu khi tạo hồ sơ.", files);
       setCreated(true);
     } catch (error) { toast.error((error as Error).message); }
@@ -218,6 +233,14 @@ export function QuickFarmUpdate() {
             <label className="field"><span>Giống</span><input value={draft.species} onChange={(e) => setDraft({ ...draft, species: e.target.value })} placeholder="Gà ta, ổi…" /></label>
             <label className="field"><span>Vị trí</span><input value={draft.location} onChange={(e) => setDraft({ ...draft, location: e.target.value })} placeholder="Chuồng A, hàng cây B…" /></label>
             <label className="field"><span>Chỉ số ban đầu</span><input value={metric} onChange={(e) => setMetric(e.target.value)} placeholder="0,25 kg hoặc cao 80 cm" /></label>
+            {draft.kind === "animal" && (
+              <div className="quick-identifier-fields">
+                <h3>Mã định danh (không bắt buộc)</h3>
+                <label className="field"><span>Loại thẻ</span><select value={identifier.type} onChange={(e) => setIdentifier({ ...identifier, type: e.target.value, placement: e.target.value === "leg_band" ? "Vòng chân" : e.target.value.startsWith("ear_tag") ? "Thẻ tai" : e.target.value === "collar_qr" ? "Vòng cổ" : "Dưới da" })}><option value="leg_band">Vòng chân</option><option value="ear_tag_qr">Thẻ tai QR</option><option value="ear_tag_rfid">Thẻ tai RFID</option><option value="collar_qr">Thẻ QR vòng cổ</option><option value="microchip">Microchip</option></select></label>
+                <label className="field"><span>Mã in nhìn thấy</span><input value={identifier.code} onChange={(e) => setIdentifier({ ...identifier, code: e.target.value })} placeholder={draft.id || "GA-005"} /></label>
+                {(identifier.type === "ear_tag_rfid" || identifier.type === "microchip") && <label className="field"><span>Mã điện tử</span><input value={identifier.electronic} onChange={(e) => setIdentifier({ ...identifier, electronic: e.target.value })} /></label>}
+              </div>
+            )}
           </section>
           <PhotoPicker files={files} onChange={setFiles} />
           <button className="button quick-save" disabled={busy} onClick={submitNew}>{busy ? "Đang tạo…" : "Tạo hồ sơ"}</button>

@@ -223,7 +223,7 @@ export function admin(a: Actor) {
 export async function snapshot(a: Actor) {
   const customer = a.role === "customer";
   const values = customer ? [a.tenant, a.id] : [a.tenant];
-  const [assets, packages, customers, orders, logs, log_images, vaccinations, requests] =
+  const [assets, packages, customers, orders, logs, log_images, vaccinations, asset_identifiers, requests] =
     await Promise.all([
       rows(
         `SELECT * FROM assets WHERE tenant=? ${customer ? "AND customer_id=?" : ""} ORDER BY id`,
@@ -254,11 +254,15 @@ export async function snapshot(a: Actor) {
         ...values,
       ),
       rows(
+        `SELECT i.* FROM asset_identifiers i WHERE i.tenant=? ${customer ? "AND EXISTS (SELECT 1 FROM assets a WHERE a.tenant=i.tenant AND a.id=i.asset_id AND a.customer_id=?)" : ""} ORDER BY attached_at DESC,created_at DESC`,
+        ...values,
+      ),
+      rows(
         `SELECT * FROM requests WHERE tenant=? ${customer ? "AND customer_id=?" : ""} ORDER BY created_at DESC`,
         ...values,
       ),
     ]);
-  return { actor: a, assets, packages, customers, orders, logs, log_images, vaccinations, requests };
+  return { actor: a, assets, packages, customers, orders, logs, log_images, vaccinations, asset_identifiers, requests };
 }
 export async function seedDemo(tenant: string) {
   const started = new Date(Date.now() - 47 * 86400000).toISOString();
@@ -612,6 +616,52 @@ export async function mutate(a: Actor, input: any) {
         "medicine", x.next_due_at ? `Nhắc lại: ${x.next_due_at}` : "Đã hoàn thành", "", now(),
       ).run();
       return id;
+    }
+    case "addAssetIdentifier": {
+      admin(a);
+      const x = z.object({
+        asset_id: text,
+        identifier_type: z.enum(["leg_band", "ear_tag_qr", "ear_tag_rfid", "collar_qr", "microchip"]),
+        visible_code: z.string().trim().min(1).max(100),
+        electronic_code: z.string().trim().max(100).default(""),
+        placement: z.string().trim().min(1).max(200),
+        attached_at: day,
+        note: z.string().trim().max(1000).default(""),
+      }).parse(input.data);
+      const asset = await first<{ id: string; kind: string }>(
+        "SELECT id,kind FROM assets WHERE tenant=? AND id=?",
+        t,
+        x.asset_id,
+      );
+      if (!asset) throw new ApiError(404, "Không tìm thấy vật nuôi.");
+      if (asset.kind !== "animal")
+        throw new ApiError(400, "Định danh điện tử chỉ áp dụng cho vật nuôi.");
+      const id = newId("DD");
+      try {
+        await statement(
+          "INSERT INTO asset_identifiers (tenant,id,asset_id,identifier_type,visible_code,electronic_code,placement,attached_at,status,retired_at,note,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+          t, id, x.asset_id, x.identifier_type, x.visible_code,
+          x.electronic_code || null, x.placement, x.attached_at, "active", null, x.note, now(),
+        ).run();
+      } catch (error) {
+        if (String(error).includes("UNIQUE"))
+          throw new ApiError(409, "Mã thẻ hoặc mã chip này đã được sử dụng.");
+        throw error;
+      }
+      return id;
+    }
+    case "retireAssetIdentifier": {
+      admin(a);
+      const x = z.object({
+        id: text,
+        status: z.enum(["lost", "damaged", "replaced", "removed"]),
+      }).parse(input.data);
+      const result = await statement(
+        "UPDATE asset_identifiers SET status=?,retired_at=? WHERE tenant=? AND id=? AND status='active'",
+        x.status, now(), t, x.id,
+      ).run();
+      if (!result.meta.changes) throw new ApiError(404, "Không tìm thấy thẻ đang sử dụng.");
+      return x.id;
     }
     case "purchase": {
       const x = z

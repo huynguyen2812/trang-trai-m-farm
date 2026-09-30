@@ -141,6 +141,29 @@ export const vaccinations = sqliteTable(
     index("vaccinations_due").on(t.tenant, t.next_due_at),
   ],
 );
+export const assetIdentifiers = sqliteTable(
+  "asset_identifiers",
+  {
+    tenant: tenant(),
+    id: text("id").notNull(),
+    asset_id: text("asset_id").notNull(),
+    identifier_type: text("identifier_type").notNull(),
+    visible_code: text("visible_code").notNull(),
+    electronic_code: text("electronic_code"),
+    placement: text("placement").notNull(),
+    attached_at: text("attached_at").notNull(),
+    status: text("status").notNull(),
+    retired_at: text("retired_at"),
+    note: text("note").notNull(),
+    created_at: text("created_at").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenant, t.id] }),
+    index("asset_identifiers_asset").on(t.tenant, t.asset_id, t.status),
+    uniqueIndex("asset_identifiers_visible_code").on(t.tenant, t.visible_code),
+    uniqueIndex("asset_identifiers_electronic_code").on(t.tenant, t.electronic_code),
+  ],
+);
 export const requests = sqliteTable(
   "requests",
   {

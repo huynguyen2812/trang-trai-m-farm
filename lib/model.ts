@@ -76,6 +76,19 @@ export type Vaccination = {
   note: string;
   created_at: string;
 };
+export type AssetIdentifier = {
+  id: string;
+  asset_id: string;
+  identifier_type: string;
+  visible_code: string;
+  electronic_code: string | null;
+  placement: string;
+  attached_at: string;
+  status: string;
+  retired_at: string | null;
+  note: string;
+  created_at: string;
+};
 export type RequestItem = {
   id: string;
   asset_id: string;
@@ -100,6 +113,7 @@ export type State = {
   logs: Log[];
   log_images: LogImage[];
   vaccinations: Vaccination[];
+  asset_identifiers: AssetIdentifier[];
   requests: RequestItem[];
 };
 export const money = (v: number) =>

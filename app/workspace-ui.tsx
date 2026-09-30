@@ -708,6 +708,49 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
       ],
     });
   }
+  function identifierForm(assetId?: string) {
+    setForm({
+      title: "Gắn mã định danh",
+      description:
+        "Mã QR chỉ dẫn đến hồ sơ đã bảo vệ. Với RFID hoặc microchip, nhập thêm mã điện tử do thiết bị cung cấp.",
+      action: "addAssetIdentifier",
+      values: {
+        asset_id: assetId || "",
+        identifier_type: "leg_band",
+        visible_code: assetId || "",
+        electronic_code: "",
+        placement: "Vòng chân",
+        attached_at: isoDay(),
+        note: "",
+      },
+      fields: [
+        {
+          key: "asset_id",
+          label: "Vật nuôi",
+          type: "select",
+          options: data?.assets.filter((asset) => asset.kind === "animal").map((asset) => [asset.id, `${asset.id} · ${asset.name}`]),
+          disabled: !!assetId,
+        },
+        {
+          key: "identifier_type",
+          label: "Loại định danh",
+          type: "select",
+          options: [
+            ["leg_band", "Vòng chân / mã nhìn thấy"],
+            ["ear_tag_qr", "Thẻ tai QR"],
+            ["ear_tag_rfid", "Thẻ tai RFID"],
+            ["collar_qr", "Thẻ QR vòng cổ"],
+            ["microchip", "Microchip"],
+          ],
+        },
+        { key: "visible_code", label: "Mã in nhìn thấy" },
+        { key: "electronic_code", label: "Mã RFID / chip", required: false },
+        { key: "placement", label: "Vị trí gắn" },
+        { key: "attached_at", label: "Ngày gắn", type: "date" },
+        { key: "note", label: "Ghi chú", type: "textarea", required: false, wide: true, max: 1000 },
+      ],
+    });
+  }
   function allocate() {
     setForm({
       title: "Phân bổ tài sản cho khách",
@@ -1695,6 +1738,9 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
                   {a.kind === "animal" && (
                     <TabsTrigger value="vaccination">Tiêm ngừa</TabsTrigger>
                   )}
+                  {a.kind === "animal" && (
+                    <TabsTrigger value="identity">Định danh</TabsTrigger>
+                  )}
                   <TabsTrigger value="agreement">Đơn & điều kiện</TabsTrigger>
                   <TabsTrigger value="qr">Mã QR</TabsTrigger>
                 </TabsList>
@@ -1741,6 +1787,42 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
                     {isAdmin && (
                       <button className="button" onClick={() => vaccinationForm(a.id)}>
                         <Syringe size={16} /> Ghi nhận mũi tiêm
+                      </button>
+                    )}
+                  </TabsContent>
+                )}
+                {a.kind === "animal" && (
+                  <TabsContent value="identity">
+                    <div className="identifier-list">
+                      {data.asset_identifiers
+                        .filter((item) => item.asset_id === a.id)
+                        .map((item) => (
+                          <article key={item.id} className="identifier-card">
+                            <div className="identifier-code">{item.visible_code}</div>
+                            <div>
+                              <strong>{({ leg_band: "Vòng chân", ear_tag_qr: "Thẻ tai QR", ear_tag_rfid: "Thẻ tai RFID", collar_qr: "Thẻ QR vòng cổ", microchip: "Microchip" } as Record<string,string>)[item.identifier_type] || item.identifier_type}</strong>
+                              <p>{item.placement} · Gắn ngày {date(item.attached_at)}</p>
+                              {item.electronic_code && <p>Mã điện tử: {item.electronic_code}</p>}
+                              <span className={`badge ${item.status === "active" ? "status-good" : "status-neutral"}`}>
+                                {({ active: "Đang sử dụng", lost: "Đã mất", damaged: "Đã hỏng", replaced: "Đã thay", removed: "Đã tháo" } as Record<string,string>)[item.status] || item.status}
+                              </span>
+                              {item.note && <p className="muted">{item.note}</p>}
+                              {isAdmin && item.status === "active" && (
+                                <div className="identifier-actions">
+                                  <button onClick={() => mutate("retireAssetIdentifier", { id: item.id, status: "lost" })}>Báo mất</button>
+                                  <button onClick={() => mutate("retireAssetIdentifier", { id: item.id, status: "replaced" })}>Đã thay</button>
+                                </div>
+                              )}
+                            </div>
+                          </article>
+                        ))}
+                      {!data.asset_identifiers.some((item) => item.asset_id === a.id) && (
+                        <div className="empty-inline">Chưa gắn mã định danh.</div>
+                      )}
+                    </div>
+                    {isAdmin && (
+                      <button className="button" onClick={() => identifierForm(a.id)}>
+                        <ScanLine size={16} /> Gắn mã định danh
                       </button>
                     )}
                   </TabsContent>
