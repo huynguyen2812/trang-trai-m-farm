@@ -443,6 +443,31 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
         const response = await fetch("/api/log-images", { method: "POST", body: formData });
         const result: any = await response.json();
         if (!response.ok) throw new Error(result.error || "Không thể lưu cập nhật.");
+      } else if (action === "saveAsset") {
+        const { images = [], ...assetValues } = values as { images?: File[] } & Record<string, any>;
+        await api("/api/app", { action, data: assetValues, ...extra });
+        if (images.length) {
+          const formData = new FormData();
+          formData.set("asset_id", String(assetValues.id));
+          formData.set("kind", "growth");
+          formData.set("title", "Ảnh hồ sơ ban đầu");
+          formData.set(
+            "body",
+            "Ghi nhận hình ảnh ban đầu khi tạo hồ sơ cây trồng hoặc vật nuôi.",
+          );
+          formData.set("metric", String(assetValues.weight || ""));
+          for (const image of images) formData.append("images", image);
+          const response = await fetch("/api/log-images", {
+            method: "POST",
+            body: formData,
+          });
+          const result: any = await response.json();
+          if (!response.ok)
+            throw new Error(
+              result.error ||
+                "Đã tạo hồ sơ nhưng chưa thể lưu ảnh. Bạn có thể thêm ảnh trong nhật ký.",
+            );
+        }
       } else {
         await api("/api/app", { action, data: values, ...extra });
       }
@@ -484,7 +509,8 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
             status: "available",
             health: "healthy",
             progress: 0,
-            weight: "",
+          weight: "",
+          images: [],
             started_at: isoDay(),
             expected_at: new Date(Date.now() + 120 * 86400000)
               .toISOString()
@@ -536,6 +562,13 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
         },
         { key: "started_at", label: "Ngày bắt đầu", type: "date" },
         { key: "expected_at", label: "Ngày dự kiến kết thúc", type: "date" },
+        {
+          key: "images",
+          label: asset ? "Thêm ảnh mới vào hồ sơ" : "Ảnh ban đầu",
+          type: "images",
+          required: false,
+          wide: true,
+        },
       ],
     });
   }
