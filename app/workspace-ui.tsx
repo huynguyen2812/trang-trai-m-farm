@@ -945,6 +945,11 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
           </span>
         </SidebarHeader>
         <SidebarContent style={{ padding: "0 12px" }}>
+          {isAdmin && (
+            <a href="/cap-nhat" className="button lime" style={{ margin: "0 8px 14px" }}>
+              <Camera size={18} /> Cập nhật nhanh trên điện thoại
+            </a>
+          )}
           <SidebarMenu>
             {menus.map(([key, label, Icon]: any) => (
               <SidebarMenuItem key={key}>

@@ -4,6 +4,7 @@ import {
   authReady,
   body,
   checkOrigin,
+  config,
   cookie,
   json,
   rateLimit,
@@ -14,13 +15,24 @@ export const dynamic = "force-dynamic";
 export const GET = (req: Request) =>
   safe(async () => {
     let user = null;
-    const token = cookie(req, "mf_access");
+    let token = cookie(req, "mf_access");
+    let refreshed: any = null;
     if (token && authReady()) {
       try {
         user = await authFetch("user", "GET", undefined, token);
       } catch {}
     }
-    return json({
+    if (!user && authReady() && cookie(req, "mf_refresh")) {
+      try {
+        refreshed = await authFetch("token?grant_type=refresh_token", "POST", {
+          refresh_token: cookie(req, "mf_refresh"),
+        });
+        token = refreshed.access_token;
+        user = refreshed.user || (await authFetch("user", "GET", undefined, token));
+      } catch {}
+    }
+    const owner = user?.email?.toLowerCase() === (config().OWNER_EMAIL || "").trim().toLowerCase();
+    const response = json({
       ready: authReady(),
       user: user
         ? {
@@ -29,9 +41,16 @@ export const GET = (req: Request) =>
             phone: user.phone,
             email_verified: !!user.email_confirmed_at,
             phone_verified: !!user.phone_confirmed_at,
+            is_owner: owner,
           }
         : null,
     });
+    if (refreshed?.access_token) {
+      response.headers.append("Set-Cookie", setCookie(req, "mf_access", refreshed.access_token, refreshed.expires_in || 3600));
+      if (refreshed.refresh_token)
+        response.headers.append("Set-Cookie", setCookie(req, "mf_refresh", refreshed.refresh_token, 60 * 60 * 24 * 30));
+    }
+    return response;
   });
 export const POST = (req: Request) =>
   safe(async () => {
@@ -40,6 +59,7 @@ export const POST = (req: Request) =>
     if (x.action === "logout") {
       const r = json({ ok: true });
       r.headers.append("Set-Cookie", setCookie(req, "mf_access", "", 0));
+      r.headers.append("Set-Cookie", setCookie(req, "mf_refresh", "", 0));
       r.headers.append("Set-Cookie", setCookie(req, "mf_demo", "", 0));
       return r;
     }
@@ -116,6 +136,11 @@ export const POST = (req: Request) =>
           result.access_token,
           result.expires_in || 3600,
         ),
+      );
+    if (result.refresh_token)
+      r.headers.append(
+        "Set-Cookie",
+        setCookie(req, "mf_refresh", result.refresh_token, 60 * 60 * 24 * 30),
       );
     r.headers.append("Set-Cookie", setCookie(req, "mf_demo", "", 0));
     return r;

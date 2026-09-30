@@ -190,10 +190,13 @@ export async function actor(req: Request): Promise<Actor> {
   const token = cookie(req, "mf_access");
   if (!token) throw new ApiError(401, "Vui lòng đăng nhập để tiếp tục.");
   const u = await authFetch("user", "GET", undefined, token);
-  if (!u.email_confirmed_at || !u.phone_confirmed_at || !u.phone)
-    throw new ApiError(403, "Bạn cần xác thực cả email và số điện thoại.");
   const owner = config().OWNER_EMAIL?.trim().toLowerCase();
-  const role = owner && u.email?.toLowerCase() === owner ? "admin" : "customer";
+  const isOwner = !!owner && u.email?.toLowerCase() === owner;
+  if (!u.email_confirmed_at)
+    throw new ApiError(403, "Bạn cần xác thực email.");
+  if (!isOwner && (!u.phone_confirmed_at || !u.phone))
+    throw new ApiError(403, "Bạn cần xác thực cả email và số điện thoại.");
+  const role = isOwner ? "admin" : "customer";
   const a: Actor = {
     tenant: "production",
     id: u.id,
@@ -208,7 +211,7 @@ export async function actor(req: Request): Promise<Actor> {
     a.id,
     a.name,
     u.email,
-    u.phone,
+    u.phone || "",
     now(),
   ).run();
   return a;

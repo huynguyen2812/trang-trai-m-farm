@@ -15,11 +15,21 @@ import {
 } from "@/components/ui/input-otp";
 import { toast } from "sonner";
 export async function api(url: string, data?: unknown) {
-  const r = await fetch(url, {
+  let r = await fetch(url, {
     method: data ? "POST" : "GET",
     headers: data ? { "Content-Type": "application/json" } : {},
     body: data ? JSON.stringify(data) : undefined,
   });
+  if (r.status === 401 && url !== "/api/auth") {
+    const refreshed = await fetch("/api/auth", { cache: "no-store" });
+    const session: any = await refreshed.json();
+    if (session.user)
+      r = await fetch(url, {
+        method: data ? "POST" : "GET",
+        headers: data ? { "Content-Type": "application/json" } : {},
+        body: data ? JSON.stringify(data) : undefined,
+      });
+  }
   const result: any = await r.json();
   if (!r.ok)
     throw new Error(result.error || "Không thể thực hiện. Vui lòng thử lại.");
@@ -122,8 +132,10 @@ export function Auth() {
         setReady(d.ready);
         if (d.user?.email_verified) {
           setEmail(d.user.email);
-          if (d.user.phone_verified) {
-            location.href = "/tai-san";
+          if (d.user.is_owner || d.user.phone_verified) {
+            location.href = d.user.is_owner
+              ? innerWidth <= 760 ? "/cap-nhat" : "/quan-tri"
+              : "/tai-san";
             return;
           }
           setStep("phone");
@@ -152,8 +164,10 @@ export function Auth() {
       } else if (step === "emailCode") {
         await api("/api/auth", { action: "verifyEmail", email, code });
         const d = await api("/api/auth");
-        if (d.user?.phone_verified) {
-          location.href = "/tai-san";
+        if (d.user?.is_owner || d.user?.phone_verified) {
+          location.href = d.user?.is_owner
+            ? innerWidth <= 760 ? "/cap-nhat" : "/quan-tri"
+            : "/tai-san";
           return;
         }
         setStep("phone");
