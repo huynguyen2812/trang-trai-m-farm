@@ -8,6 +8,13 @@
       "when": 1790703615516,
       "tag": "0000_pale_hulk",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1790753897452,
+      "tag": "0001_chemical_marrow",
+      "breakpoints": true
     }
   ]
 }

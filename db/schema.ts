@@ -100,6 +100,26 @@ export const logs = sqliteTable(
     index("logs_asset").on(t.tenant, t.asset_id, t.created_at),
   ],
 );
+export const logImages = sqliteTable(
+  "log_images",
+  {
+    tenant: tenant(),
+    id: text("id").notNull(),
+    log_id: text("log_id").notNull(),
+    asset_id: text("asset_id").notNull(),
+    object_key: text("object_key").notNull(),
+    content_type: text("content_type").notNull(),
+    file_name: text("file_name").notNull(),
+    byte_size: integer("byte_size").notNull(),
+    created_at: text("created_at").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenant, t.id] }),
+    uniqueIndex("log_images_object_key").on(t.object_key),
+    index("log_images_log").on(t.tenant, t.log_id),
+    index("log_images_asset").on(t.tenant, t.asset_id, t.created_at),
+  ],
+);
 export const requests = sqliteTable(
   "requests",
   {

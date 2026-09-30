@@ -15,6 +15,12 @@ export function db() {
     throw new ApiError(503, "Kho dữ liệu chưa sẵn sàng. Vui lòng thử lại sau.");
   return env.DB;
 }
+export function media() {
+  const bucket = (env as unknown as { MEDIA?: R2Bucket }).MEDIA;
+  if (!bucket)
+    throw new ApiError(503, "Kho ảnh chưa sẵn sàng. Vui lòng thử lại sau.");
+  return bucket;
+}
 export const statement = (sql: string, ...values: unknown[]) =>
   db()
     .prepare(sql)
@@ -214,7 +220,7 @@ export function admin(a: Actor) {
 export async function snapshot(a: Actor) {
   const customer = a.role === "customer";
   const values = customer ? [a.tenant, a.id] : [a.tenant];
-  const [assets, packages, customers, orders, logs, requests] =
+  const [assets, packages, customers, orders, logs, log_images, requests] =
     await Promise.all([
       rows(
         `SELECT * FROM assets WHERE tenant=? ${customer ? "AND customer_id=?" : ""} ORDER BY id`,
@@ -237,11 +243,15 @@ export async function snapshot(a: Actor) {
         ...values,
       ),
       rows(
+        `SELECT i.id,i.log_id,i.asset_id,i.file_name,i.byte_size,i.created_at FROM log_images i WHERE i.tenant=? ${customer ? "AND EXISTS (SELECT 1 FROM assets a WHERE a.tenant=i.tenant AND a.id=i.asset_id AND a.customer_id=?)" : ""} ORDER BY created_at,id`,
+        ...values,
+      ),
+      rows(
         `SELECT * FROM requests WHERE tenant=? ${customer ? "AND customer_id=?" : ""} ORDER BY created_at DESC`,
         ...values,
       ),
     ]);
-  return { actor: a, assets, packages, customers, orders, logs, requests };
+  return { actor: a, assets, packages, customers, orders, logs, log_images, requests };
 }
 export async function seedDemo(tenant: string) {
   const started = new Date(Date.now() - 47 * 86400000).toISOString();

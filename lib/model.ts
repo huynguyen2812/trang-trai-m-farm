@@ -56,6 +56,14 @@ export type Log = {
   image_url: string;
   created_at: string;
 };
+export type LogImage = {
+  id: string;
+  log_id: string;
+  asset_id: string;
+  file_name: string;
+  byte_size: number;
+  created_at: string;
+};
 export type RequestItem = {
   id: string;
   asset_id: string;
@@ -78,6 +86,7 @@ export type State = {
   customers: Customer[];
   orders: Order[];
   logs: Log[];
+  log_images: LogImage[];
   requests: RequestItem[];
 };
 export const money = (v: number) =>

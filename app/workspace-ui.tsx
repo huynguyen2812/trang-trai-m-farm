@@ -21,6 +21,8 @@ import {
   Download,
   FlaskConical,
   Settings2,
+  Camera,
+  X,
 } from "lucide-react";
 import {
   Sidebar,
@@ -111,6 +113,9 @@ const logLabels: Record<string, string> = {
   medicine: "Thuốc",
   fertilizer: "Phân bón",
   care: "Chăm sóc",
+  health: "Sức khỏe",
+  flowering: "Ra hoa",
+  fruiting: "Nuôi trái",
 };
 const isoDay = () => new Date().toISOString().slice(0, 10);
 const id = (prefix: string) =>
@@ -150,7 +155,7 @@ function Stats({ items }: { items: [string, string, string][] }) {
     </div>
   );
 }
-function Logs({ logs }: { logs: State["logs"] }) {
+function Logs({ logs, images }: { logs: State["logs"]; images: State["log_images"] }) {
   return logs.length ? (
     <div className="timeline">
       {logs.map((l) => (
@@ -165,17 +170,23 @@ function Logs({ logs }: { logs: State["logs"] }) {
               {l.metric}
             </span>
           )}
-          {l.image_url && (
-            <img
-              src={l.image_url}
-              className="detail-photo"
-              loading="lazy"
-              alt={l.title}
-              referrerPolicy="no-referrer"
-              onError={(e) => {
-                e.currentTarget.style.display = "none";
-              }}
-            />
+          {(images.some((image) => image.log_id === l.id) || l.image_url) && (
+            <div className="log-photo-grid">
+              {images
+                .filter((image) => image.log_id === l.id)
+                .map((image, index) => (
+                  <img
+                    key={image.id}
+                    src={`/api/log-images/${image.id}`}
+                    className="detail-photo"
+                    loading="lazy"
+                    alt={`${l.title} · ảnh ${index + 1}`}
+                  />
+                ))}
+              {l.image_url && (
+                <img src={l.image_url} className="detail-photo" loading="lazy" alt={l.title} referrerPolicy="no-referrer" />
+              )}
+            </div>
           )}
         </article>
       ))}
@@ -258,6 +269,43 @@ function EntryForm({
                     required={f.required !== false}
                     maxLength={f.max || 3000}
                   />
+                ) : f.type === "images" ? (
+                  <div className="photo-picker">
+                    <input
+                      id="daily-update-images"
+                      className="sr-only"
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      multiple
+                      onChange={(e) => {
+                        const incoming = Array.from(e.target.files || []);
+                        const current = (values[f.key] || []) as File[];
+                        setValues({ ...values, [f.key]: [...current, ...incoming].slice(0, 6) });
+                        e.currentTarget.value = "";
+                      }}
+                    />
+                    <label htmlFor="daily-update-images" className="photo-picker-button">
+                      <Camera size={20} />
+                      Chụp hoặc chọn ảnh
+                    </label>
+                    <small>Tối đa 6 ảnh JPG, PNG hoặc WebP; mỗi ảnh dưới 8 MB.</small>
+                    {!!values[f.key]?.length && (
+                      <div className="photo-preview-grid">
+                        {(values[f.key] as File[]).map((file, index) => (
+                          <figure key={`${file.name}-${file.lastModified}-${index}`}>
+                            <img src={URL.createObjectURL(file)} alt={`Ảnh đã chọn ${index + 1}`} />
+                            <button
+                              type="button"
+                              aria-label={`Bỏ ảnh ${index + 1}`}
+                              onClick={() => setValues({ ...values, [f.key]: (values[f.key] as File[]).filter((_, i) => i !== index) })}
+                            >
+                              <X size={15} />
+                            </button>
+                          </figure>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <input
                     type={f.type || "text"}
@@ -387,7 +435,17 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
   async function mutate(action: string, values: any, extra = {}) {
     setBusy(true);
     try {
-      await api("/api/app", { action, data: values, ...extra });
+      if (action === "addLog") {
+        const formData = new FormData();
+        for (const key of ["asset_id", "title", "body", "kind", "metric"])
+          formData.set(key, String(values[key] || ""));
+        for (const image of (values.images || []) as File[]) formData.append("images", image);
+        const response = await fetch("/api/log-images", { method: "POST", body: formData });
+        const result: any = await response.json();
+        if (!response.ok) throw new Error(result.error || "Không thể lưu cập nhật.");
+      } else {
+        await api("/api/app", { action, data: values, ...extra });
+      }
       await reload();
       toast.success("Đã lưu thay đổi.");
       setForm(null);
@@ -536,7 +594,7 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
   }
   function logForm(assetId?: string) {
     setForm({
-      title: "Thêm nhật ký chăm sóc",
+      title: "Cập nhật hôm nay",
       description:
         "Ghi thông tin thực tế. Nội dung sẽ hiển thị trong hồ sơ của khách đang sở hữu cây/con.",
       action: "addLog",
@@ -546,7 +604,7 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
         body: "",
         kind: "growth",
         metric: "",
-        image_url: "",
+        images: [],
       },
       fields: [
         {
@@ -557,24 +615,25 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
         },
         {
           key: "kind",
-          label: "Nhóm nhật ký",
+          label: "Loại cập nhật",
           type: "select",
           options: Object.entries(logLabels),
         },
         { key: "title", label: "Tiêu đề", wide: true },
         {
           key: "body",
-          label: "Nội dung chăm sóc",
+          label: "Ghi chú tình hình và việc đã làm",
           type: "textarea",
           wide: true,
           max: 5000,
         },
         { key: "metric", label: "Chỉ số ghi nhận", required: false },
         {
-          key: "image_url",
-          label: "Đường dẫn ảnh (HTTPS)",
+          key: "images",
+          label: "Ảnh cây / vật nuôi",
           required: false,
-          type: "url",
+          type: "images",
+          wide: true,
         },
       ],
     });
@@ -1110,7 +1169,7 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
                   </section>
                   <section className="panel">
                     <h3>Nhật ký gần đây</h3>
-                    <Logs logs={data.logs.slice(0, 3)} />
+                    <Logs logs={data.logs.slice(0, 3)} images={data.log_images} />
                     <button
                       className="text-link"
                       onClick={() => setSection("logs")}
@@ -1140,7 +1199,7 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
                   )}
                   <section className="panel" style={{ marginTop: 25 }}>
                     <h3>Những cập nhật mới nhất</h3>
-                    <Logs logs={data.logs.slice(0, 4)} />
+                    <Logs logs={data.logs.slice(0, 4)} images={data.log_images} />
                   </section>
                 </>
               )}
@@ -1429,6 +1488,9 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
                 logs={data.logs.filter(
                   (l) => status === "all" || l.asset_id === status,
                 )}
+                images={data.log_images.filter(
+                  (image) => status === "all" || image.asset_id === status,
+                )}
               />
             </section>
           )}
@@ -1559,11 +1621,14 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
                   <TabsTrigger value="qr">Mã QR</TabsTrigger>
                 </TabsList>
                 <TabsContent value="history">
-                  <Logs logs={data.logs.filter((l) => l.asset_id === a.id)} />
+                  <Logs
+                    logs={data.logs.filter((l) => l.asset_id === a.id)}
+                    images={data.log_images.filter((image) => image.asset_id === a.id)}
+                  />
                   {isAdmin && (
                     <button className="button" onClick={() => logForm(a.id)}>
                       <Plus size={16} />
-                      Ghi nhật ký mới
+                      Cập nhật hôm nay
                     </button>
                   )}
                 </TabsContent>
