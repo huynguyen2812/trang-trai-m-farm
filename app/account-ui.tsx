@@ -1,4 +1,5 @@
 "use client";
+import { destinationAfterLogin } from "@/lib/navigation";
 import { useEffect, useState } from "react";
 import {
   Sprout,
@@ -58,7 +59,7 @@ export function Demo() {
     setBusy(role);
     try {
       await api("/api/demo", { role });
-      location.href = role === "admin" ? "/quan-tri" : "/tai-san";
+      location.href = role === "system_admin" ? "/he-thong" : role === "admin" ? "/quan-tri" : "/tai-san";
     } catch (e) {
       toast.error((e as Error).message);
       setBusy("");
@@ -78,6 +79,7 @@ export function Demo() {
           không gửi email/SMS, không thu tiền và không tạo giao dịch thật. Phiên
           mẫu có hiệu lực 7 ngày.
         </div>
+        <button className="button outline" disabled={!!busy} onClick={() => enter("system_admin")}>Trải nghiệm admin hệ thống</button>
         <div className="demo-choices">
           <article className="panel">
             <Sprout size={35} />
@@ -132,10 +134,8 @@ export function Auth() {
         setReady(d.ready);
         if (d.user?.email_verified) {
           setEmail(d.user.email);
-          if (d.user.is_owner || d.user.phone_verified) {
-            location.href = d.user.is_owner
-              ? innerWidth <= 760 ? "/cap-nhat" : "/quan-tri"
-              : "/tai-san";
+          if (d.user.is_system_admin || d.user.is_owner || d.user.phone_verified) {
+            location.href = d.user.is_system_admin ? "/he-thong" : destinationAfterLogin(!!d.user.is_owner, innerWidth <= 760, location.search);
             return;
           }
           setStep("phone");
@@ -164,10 +164,8 @@ export function Auth() {
       } else if (step === "emailCode") {
         await api("/api/auth", { action: "verifyEmail", email, code });
         const d = await api("/api/auth");
-        if (d.user?.is_owner || d.user?.phone_verified) {
-          location.href = d.user?.is_owner
-            ? innerWidth <= 760 ? "/cap-nhat" : "/quan-tri"
-            : "/tai-san";
+        if (d.user?.is_system_admin || d.user?.is_owner || d.user?.phone_verified) {
+          location.href = d.user?.is_system_admin ? "/he-thong" : destinationAfterLogin(!!d.user?.is_owner, innerWidth <= 760, location.search);
           return;
         }
         setStep("phone");
@@ -183,7 +181,7 @@ export function Auth() {
         const d = await api("/api/auth");
         if (!d.user?.email_verified || !d.user?.phone_verified)
           throw new Error("Chưa hoàn tất xác thực. Vui lòng thử lại.");
-        location.href = "/tai-san";
+        location.href = destinationAfterLogin(false, innerWidth <= 760, location.search);
       }
     } catch (e) {
       setError((e as Error).message);

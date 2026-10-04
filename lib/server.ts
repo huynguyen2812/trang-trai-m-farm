@@ -147,7 +147,8 @@ export async function authFetch(
       ...(data ? { body: JSON.stringify(data) } : {}),
     },
   );
-  const out = (await r.json()) as any;
+  if (r.status === 204) return null;
+  const out = (await r.json().catch(() => null)) as any;
   if (!r.ok) {
     if (r.status === 429)
       throw new ApiError(429, "Vui lòng chờ trước khi yêu cầu mã mới.");
@@ -163,9 +164,15 @@ export type Actor = {
   id: string;
   name: string;
   email: string;
-  role: "admin" | "customer";
+  role: "admin" | "customer" | "system_admin";
   demo: boolean;
 };
+export async function accountRole(userId: string, email: string, tenant = "production") {
+  const access=await first<{role:"admin"|"customer";suspended:number}>("SELECT role,suspended FROM account_access WHERE tenant=? AND user_id=?",tenant,userId);
+  if(access?.suspended) throw new ApiError(403,"Tài khoản đã bị khóa truy cập. Vui lòng liên hệ quản trị hệ thống.");
+  if(tenant === "production" && (config().SYSTEM_ADMIN_EMAILS || "").split(",").some(e=>!!e.trim() && e.trim().toLowerCase()===email.toLowerCase())) return "system_admin" as const;
+  return access?.role || (tenant === "production" && !!config().OWNER_EMAIL?.trim() && email.toLowerCase()===config().OWNER_EMAIL.trim().toLowerCase() ? "admin" : "customer");
+}
 export async function actor(req: Request): Promise<Actor> {
   const demo = cookie(req, "mf_demo");
   if (demo) {
@@ -174,29 +181,35 @@ export async function actor(req: Request): Promise<Actor> {
       await hash(demo),
       Date.now(),
     );
-    if (session)
+    if (session) {
+      const demoId=session.role === "system_admin" ? "DEMO-SYSTEM" : session.role === "admin" ? "DEMO-ADMIN" : "KH-001";
+      const resolved = await accountRole(demoId, "demo@example.com", session.tenant);
+      const access = await first("SELECT role FROM account_access WHERE tenant=? AND user_id=?",session.tenant,demoId);
       return {
         tenant: session.tenant,
-        id: session.role === "admin" ? "DEMO-ADMIN" : "KH-001",
+        id: demoId,
         name:
-          session.role === "admin"
-            ? "Chủ trang trại (mẫu)"
-            : "Nguyễn Minh Anh (mẫu)",
-        email: "minhanh@example.com",
-        role: session.role,
+          session.role === "system_admin"
+            ? "Admin hệ thống (mẫu)"
+            : session.role === "admin"
+              ? "Chủ trang trại (mẫu)"
+              : "Nguyễn Minh Anh (mẫu)",
+        email: session.role === "system_admin" ? "demo-system@example.com" : "minhanh@example.com",
+        role: access ? resolved : session.role,
         demo: true,
       };
+    }
   }
   const token = cookie(req, "mf_access");
   if (!token) throw new ApiError(401, "Vui lòng đăng nhập để tiếp tục.");
   const u = await authFetch("user", "GET", undefined, token);
-  const owner = config().OWNER_EMAIL?.trim().toLowerCase();
-  const isOwner = !!owner && u.email?.toLowerCase() === owner;
+  const role = await accountRole(u.id, u.email || "");
+  const isOwner = role === "admin" || role === "system_admin";
   if (!u.email_confirmed_at)
     throw new ApiError(403, "Bạn cần xác thực email.");
   if (!isOwner && (!u.phone_confirmed_at || !u.phone))
     throw new ApiError(403, "Bạn cần xác thực cả email và số điện thoại.");
-  const role = isOwner ? "admin" : "customer";
+
   const a: Actor = {
     tenant: "production",
     id: u.id,
@@ -206,12 +219,14 @@ export async function actor(req: Request): Promise<Actor> {
     demo: false,
   };
   await statement(
-    "INSERT INTO customers (tenant,id,name,email,phone,email_verified,phone_verified,created_at) VALUES (?,?,?,?,?,1,1,?) ON CONFLICT(tenant,id) DO UPDATE SET email=excluded.email,phone=excluded.phone,email_verified=1,phone_verified=1",
+    "INSERT INTO customers (tenant,id,name,email,phone,email_verified,phone_verified,created_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(tenant,id) DO UPDATE SET email=excluded.email,phone=excluded.phone,email_verified=excluded.email_verified,phone_verified=excluded.phone_verified",
     a.tenant,
     a.id,
     a.name,
     u.email,
     u.phone || "",
+    Number(!!u.email_confirmed_at),
+    Number(!!u.phone_confirmed_at && !!u.phone),
     now(),
   ).run();
   return a;
@@ -221,6 +236,7 @@ export function admin(a: Actor) {
     throw new ApiError(403, "Chỉ chủ trang trại có quyền thực hiện.");
 }
 export async function snapshot(a: Actor) {
+  if(a.role === "system_admin") throw new ApiError(403,"Mở /he-thong để quản trị tài khoản.");
   const customer = a.role === "customer";
   const values = customer ? [a.tenant, a.id] : [a.tenant];
   const [assets, packages, customers, orders, logs, log_images, vaccinations, asset_identifiers, requests] =
@@ -471,7 +487,24 @@ export const packageSchema = z.object({
   benefits: z.string().trim().min(1).max(3000),
   active: z.coerce.number().int().min(0).max(1),
 });
+/** Keep the current measurement and explicit health choice in the journal transaction. */
+export function journalHealthNote(body: string, health: string) {
+  const labels: Record<string, string> = { healthy: "Khỏe mạnh", attention: "Cần theo dõi", treatment: "Đang điều trị" };
+  return health && labels[health] ? body + "\nTình trạng sau kiểm tra: " + labels[health] : body;
+}
+export function journalAssetUpdates(tenant: string, assetId: string, kind: string, metric: string, health = "") {
+  if (health && !["healthy", "attention", "treatment"].includes(health))
+    throw new ApiError(400, "Tình trạng sức khỏe không hợp lệ.");
+  if (kind === "growth" && metric.trim().length > 80)
+    throw new ApiError(400, "Chỉ số sinh trưởng tối đa 80 ký tự.");
+  return [
+    ...(kind === "growth" && metric.trim() ? [statement("UPDATE assets SET weight=? WHERE tenant=? AND id=?", metric.trim(), tenant, assetId)] : []),
+    ...(health ? [statement("UPDATE assets SET health=? WHERE tenant=? AND id=?", health, tenant, assetId)] : []),
+  ];
+}
+
 export async function mutate(a: Actor, input: any) {
+  if(a.role === "system_admin") throw new ApiError(403,"Admin hệ thống không thao tác nghiệp vụ trang trại.");
   const t = a.tenant;
   switch (input.action) {
     case "savePackage": {
@@ -502,6 +535,8 @@ export async function mutate(a: Actor, input: any) {
         t,
         x.id,
       );
+      if (old && input.create_only === true)
+        throw new ApiError(409, "Mã cây/con đã tồn tại. Hãy chọn mã khác hoặc mở hồ sơ để cập nhật.");
       if (old?.customer_id && x.status === "available")
         throw new ApiError(
           400,
@@ -547,7 +582,8 @@ export async function mutate(a: Actor, input: any) {
           asset_id: text,
           title: text,
           body: z.string().trim().min(1).max(5000),
-          kind: z.enum(["growth", "food", "medicine", "fertilizer", "care"]),
+          kind: z.enum(["growth", "food", "medicine", "fertilizer", "care", "health", "flowering", "fruiting"]),
+          health: z.enum(["", "healthy", "attention", "treatment"]).optional().default(""),
           metric: z.string().max(100),
           image_url: z
             .string()
@@ -567,18 +603,18 @@ export async function mutate(a: Actor, input: any) {
       )
         throw new ApiError(404, "Không tìm thấy tài sản.");
       const id = newId("NK");
-      await statement(
+      await db().batch([statement(
         "INSERT INTO logs VALUES (?,?,?,?,?,?,?,?,?)",
         t,
         id,
         x.asset_id,
         x.title,
-        x.body,
+        journalHealthNote(x.body, x.health),
         x.kind,
         x.metric,
         x.image_url,
         now(),
-      ).run();
+      ), ...journalAssetUpdates(t, x.asset_id, x.kind, x.metric, x.health)]);
       return id;
     }
     case "addVaccination": {
@@ -604,17 +640,16 @@ export async function mutate(a: Actor, input: any) {
       if (x.next_due_at && Date.parse(x.next_due_at) < Date.parse(x.administered_at))
         throw new ApiError(400, "Ngày nhắc tiếp theo phải sau ngày tiêm.");
       const id = newId("TN");
-      await statement(
+      await db().batch([statement(
         "INSERT INTO vaccinations (tenant,id,asset_id,vaccine_name,dose_label,administered_at,next_due_at,batch_number,provider,note,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         t, id, x.asset_id, x.vaccine_name, x.dose_label, x.administered_at,
         x.next_due_at || null, x.batch_number, x.provider, x.note, now(),
-      ).run();
-      await statement(
+      ), statement(
         "INSERT INTO logs (tenant,id,asset_id,title,body,kind,metric,image_url,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
         t, newId("NK"), x.asset_id, `Tiêm ngừa · ${x.vaccine_name}`,
         [x.dose_label, x.provider && `Thực hiện bởi: ${x.provider}`, x.note].filter(Boolean).join("\n"),
         "medicine", x.next_due_at ? `Nhắc lại: ${x.next_due_at}` : "Đã hoàn thành", "", now(),
-      ).run();
+      )]);
       return id;
     }
     case "addAssetIdentifier": {

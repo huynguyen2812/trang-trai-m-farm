@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./stitch.css";
 import { Toaster } from "@/components/ui/sonner";
 export const metadata: Metadata = {
   title: "M FARM — Gắn bó từ ngày gieo mầm",

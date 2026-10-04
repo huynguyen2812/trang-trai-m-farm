@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   authFetch,
+  accountRole,
   authReady,
   body,
   checkOrigin,
@@ -31,7 +32,8 @@ export const GET = (req: Request) =>
         user = refreshed.user || (await authFetch("user", "GET", undefined, token));
       } catch {}
     }
-    const owner = user?.email?.toLowerCase() === (config().OWNER_EMAIL || "").trim().toLowerCase();
+    const role = user?.email_confirmed_at ? await accountRole(user.id,user.email || "") : "customer";
+    const owner = role === "admin";
     const response = json({
       ready: authReady(),
       user: user
@@ -42,6 +44,8 @@ export const GET = (req: Request) =>
             email_verified: !!user.email_confirmed_at,
             phone_verified: !!user.phone_confirmed_at,
             is_owner: owner,
+            is_system_admin: role === "system_admin",
+            role,
           }
         : null,
     });
@@ -57,6 +61,12 @@ export const POST = (req: Request) =>
     checkOrigin(req);
     const x = await body(req);
     if (x.action === "logout") {
+      const token = cookie(req, "mf_access");
+      if (token && authReady()) {
+        try {
+          await authFetch("logout?scope=local", "POST", undefined, token);
+        } catch {}
+      }
       const r = json({ ok: true });
       r.headers.append("Set-Cookie", setCookie(req, "mf_access", "", 0));
       r.headers.append("Set-Cookie", setCookie(req, "mf_refresh", "", 0));

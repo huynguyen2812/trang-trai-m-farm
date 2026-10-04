@@ -25,7 +25,7 @@ export const GET = (req: Request, context: { params: Promise<{ id: string }> }) 
     return new Response(object.body, {
       headers: {
         "Content-Type": image.content_type,
-        "Cache-Control": "private, max-age=3600",
+        "Cache-Control": "private, no-store",
         "X-Content-Type-Options": "nosniff",
       },
     });

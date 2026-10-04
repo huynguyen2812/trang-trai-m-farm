@@ -1,0 +1,493 @@
+/* M FARM — integration of the approved Stitch design system, September 2026.
+   Data, permissions and mutations continue to use the existing application API. */
+body {
+  font-family: "Segoe UI", Arial, sans-serif;
+}
+.button,
+.field input,
+.field select,
+.field textarea {
+  border-radius: 12px;
+}
+.button {
+  min-height: 48px;
+}
+.panel,
+.catalog-card {
+  border-radius: 16px;
+  box-shadow: 0 3px 16px #17372a04;
+}
+.workspace {
+  max-width: 1600px;
+  padding: 36px clamp(20px, 3vw, 48px);
+}
+.workspace-heading h1 {
+  font-size: clamp(26px, 2.6vw, 36px);
+  letter-spacing: -0.035em;
+}
+.workspace-heading .eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.13em;
+}
+.app-topbar {
+  min-height: 76px;
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+}
+.stat-grid {
+  gap: 20px;
+}
+.stat-grid > * {
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+.farm-workspace table th {
+  background: #f2f5f1;
+  color: var(--muted-foreground);
+  font-weight: 600;
+  height: 52px;
+}
+.farm-workspace table td {
+  padding-top: 18px;
+  padding-bottom: 18px;
+}
+.asset-cover {
+  height: 200px;
+  width: 100%;
+  background: #e7ede1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #607367;
+  overflow: hidden;
+  border-radius: 14px 14px 0 0;
+  font-size: 13px;
+}
+.asset-cover.animal {
+  background: #f0ecdf;
+}
+.asset-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.asset-cover-icon {
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: #ffffff80;
+}
+.asset-cover-icon svg {
+  width: 38px;
+  height: 38px;
+  stroke-width: 1.4;
+}
+.asset-cover.compact {
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  flex: 0 0 64px;
+}
+.asset-cover.compact .asset-cover-icon {
+  width: 48px;
+  height: 48px;
+}
+.asset-cover.compact svg {
+  width: 28px;
+  height: 28px;
+}
+.asset-card-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+.catalog-body h3 {
+  margin: 12px 0 8px;
+}
+.catalog-body .button {
+  width: 100%;
+}
+.customer-workspace {
+  display: block;
+}
+.customer-workspace > main {
+  width: 100%;
+}
+.customer-workspace .workspace {
+  max-width: 1280px;
+  margin: auto;
+}
+.customer-navigation {
+  display: flex;
+  gap: 8px;
+  padding: 12px max(24px, calc((100% - 1200px) / 2));
+  background: white;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.customer-navigation button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  white-space: nowrap;
+  font-size: 14px;
+  color: var(--muted-foreground);
+}
+.customer-navigation button[aria-current] {
+  background: #e7efe3;
+  color: var(--primary);
+  font-weight: 700;
+}
+.section-tabs [role="tablist"] {
+  display: flex;
+  width: 100%;
+  overflow-x: auto;
+  justify-content: flex-start;
+}
+.section-tabs [role="tab"] {
+  min-height: 44px;
+  flex-shrink: 0;
+}
+.quick-shell {
+  padding-bottom: 110px;
+}
+.quick-header button {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+}
+.quick-header h1 {
+  font-size: 22px;
+}
+.mobile-greeting {
+  margin: 22px 0;
+}
+.mobile-greeting h1 {
+  font-size: 28px;
+  line-height: 1.25;
+  font-weight: 750;
+  letter-spacing: -0.025em;
+  margin: 8px 0;
+}
+.mobile-greeting p {
+  color: var(--muted-foreground);
+  font-size: 15px;
+}
+.farm-quick-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 22px 0;
+}
+.farm-quick-actions button {
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: white;
+}
+.farm-quick-actions button:first-child {
+  background: var(--primary);
+  color: white;
+}
+.farm-quick-actions button:last-child {
+  grid-column: 1/-1;
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 2px 12px;
+  background: #e8efdf;
+}
+.farm-quick-actions button:last-child svg {
+  grid-row: span 2;
+  align-self: center;
+}
+.farm-quick-actions button span {
+  font-size: 13px;
+  opacity: 0.8;
+}
+.farm-bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(100%, 520px);
+  display: flex;
+  justify-content: space-around;
+  background: white;
+  border-top: 1px solid var(--border);
+  padding: 10px 8px max(12px, env(safe-area-inset-bottom));
+  z-index: 10;
+}
+.farm-bottom-nav button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  min-height: 52px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.farm-bottom-nav button[aria-current] {
+  color: var(--primary);
+  font-weight: 750;
+  background: #edf3e7;
+  border-radius: 12px;
+}
+.mobile-section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 20px 0 14px;
+  gap: 10px;
+}
+.mobile-section-heading h2 {
+  font-size: 19px;
+  font-weight: 700;
+}
+.mobile-section-heading button {
+  font-size: 14px;
+  color: var(--primary);
+  min-height: 44px;
+}
+.mobile-asset-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.mobile-asset-grid .asset-cover {
+  height: 135px;
+}
+.mobile-asset-grid .catalog-body {
+  padding: 14px;
+}
+.mobile-asset-grid h3 {
+  font-size: 17px;
+}
+.mobile-asset-grid small {
+  color: var(--muted-foreground);
+}
+.reminder-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  text-align: left;
+  gap: 12px;
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+}
+.reminder-row small {
+  display: block;
+  color: var(--muted-foreground);
+}
+.quick-asset-list button {
+  justify-content: flex-start;
+  background: white;
+}
+.quick-asset-list button > span {
+  flex: 1;
+  font-size: 16px;
+}
+.quick-asset-list button small {
+  font-size: 13px;
+  display: block;
+}
+.quick-camera.primary {
+  min-height: 104px;
+  flex-direction: column;
+}
+.quick-kind-grid button {
+  min-height: 48px;
+}
+.quick-preview-grid button {
+  width: 44px;
+  height: 44px;
+}
+.quick-card .button + .button {
+  margin-top: 12px;
+}
+.public-nav {
+  border-bottom: 1px solid var(--border);
+}
+.hero h1 {
+  letter-spacing: -0.035em;
+}
+.offer-card {
+  border-radius: 20px;
+}
+.catalog-art {
+  border-radius: 16px 16px 0 0;
+}
+.auth-main .field input {
+  min-height: 52px;
+}
+:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 3px;
+}
+@media (max-width: 700px) {
+  .customer-navigation {
+    gap: 4px;
+    padding: 8px 12px;
+  }
+  .customer-navigation button {
+    min-height: 48px;
+    padding: 8px 12px;
+  }
+  .customer-workspace .app-topbar > span:first-of-type {
+    display: none;
+  }
+  .workspace {
+    padding: 24px 16px;
+  }
+  .workspace-heading {
+    gap: 20px;
+  }
+  .workspace-heading h1 {
+    font-size: 27px;
+  }
+  .workspace-heading .button {
+    width: 100%;
+  }
+  .stat-grid {
+    gap: 12px;
+  }
+  .asset-cover {
+    height: 210px;
+  }
+  .quick-shell {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .auth-main {
+    padding: 32px 24px;
+  }
+  .hero h1 {
+    font-size: 3.25rem;
+  }
+}
+
+.farm-mobile-home .quick-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 60px;
+}
+.farm-mobile-home .quick-header > a.brand {
+  width: auto;
+  height: auto;
+  display: flex;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+  white-space: nowrap;
+}
+.farm-mobile-home .quick-header .badge {
+  flex: none;
+}
+fieldset {
+  min-width: 0;
+}
+.quick-new-form fieldset:not(.quick-identifier-fields) {
+  display: grid;
+  gap: 12px;
+}
+button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.asset-cover {
+  flex-shrink: 0;
+}
+[data-slot="sheet-content"] > * {
+  flex-shrink: 0;
+}
+[data-slot="sheet-content"] [data-slot="sheet-title"] {
+  font-size: 28px;
+  line-height: 1.25;
+  padding-right: 24px;
+}
+[data-slot="sheet-content"] [data-slot="sheet-header"] {
+  padding: 0;
+}
+[data-slot="sheet-content"] .asset-cover {
+  border-radius: 14px;
+}
+[data-slot="sheet-content"] > button:last-child {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  top: 8px;
+  right: 8px;
+}
+.section-tabs [role="tablist"] {
+  height: auto;
+  min-height: 48px;
+  overflow-y: hidden;
+}
+
+.farm-asset-sheet {
+  width: min(100vw, 600px);
+  max-width: 100vw;
+  min-width: 0;
+  overflow-x: hidden;
+}
+.farm-asset-sheet > *,
+.farm-asset-sheet .section-tabs {
+  min-width: 0;
+  max-width: 100%;
+}
+.farm-asset-sheet .detail-grid dd {
+  overflow-wrap: anywhere;
+}
+.farm-asset-sheet [role="tablist"] {
+  max-width: 100%;
+}
+@media (max-width: 700px) {
+  .farm-asset-sheet {
+    width: 100vw;
+    padding: 20px;
+  }
+}
+
+.qr-scanner {
+  margin-top: 14px;
+}
+.qr-scanner video {
+  display: block;
+  width: 100%;
+  max-height: 300px;
+  background: #123e2d;
+  border-radius: 12px;
+  margin-top: 12px;
+}
+.qr-scanner p {
+  font-size: 14px;
+  color: var(--muted-foreground);
+  margin-top: 8px;
+}
+
+.system-users { width:100%; text-align:left; border-collapse:collapse; min-width:680px; }
+.system-users th,.system-users td { padding:16px; border-bottom:1px solid var(--border); }
+.system-audit { padding:16px 0; border-bottom:1px solid var(--border); }
