@@ -61,6 +61,12 @@ export const POST = (req: Request) =>
     checkOrigin(req);
     const x = await body(req);
     if (x.action === "logout") {
+      const token = cookie(req, "mf_access");
+      if (token && authReady()) {
+        try {
+          await authFetch("logout?scope=local", "POST", undefined, token);
+        } catch {}
+      }
       const r = json({ ok: true });
       r.headers.append("Set-Cookie", setCookie(req, "mf_access", "", 0));
       r.headers.append("Set-Cookie", setCookie(req, "mf_refresh", "", 0));

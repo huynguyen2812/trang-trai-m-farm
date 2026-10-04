@@ -1,7 +1,23 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { api } from "./account-ui";
-import { ShieldCheck, Search } from "lucide-react";
+import {
+  ShieldCheck,
+  LayoutDashboard,
+  Users,
+  History,
+  Settings,
+  RefreshCw,
+  Sprout,
+  LogOut,
+} from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+
 type User = {
   id: string;
   name: string;
@@ -17,38 +33,142 @@ type Audit = {
   actor_id: string;
   target_id: string;
   reason: string;
+  before_state: string;
   after_state: string;
   created_at: string;
 };
 type Data = {
-  actor: { name: string; demo: boolean };
+  actor: { id: string; name: string; role: string; demo: boolean };
   users: User[];
   audit: Audit[];
+  overview: { assets: number; orders: number; packages: number; images: number };
+  connections: { auth: boolean; owner: boolean; systemAdmin: boolean; zns: boolean };
 };
+
+const PAGE_SIZE = 10;
 const labels: Record<string, string> = {
   system_admin: "Admin hệ thống",
   admin: "Chủ trang trại",
   customer: "Khách hàng",
 };
+const sections = [
+  { id: "overview", name: "Tổng quan", icon: LayoutDashboard },
+  { id: "users", name: "Tài khoản", icon: Users },
+  { id: "audit", name: "Nhật ký hoạt động", icon: History },
+  { id: "settings", name: "Thiết lập & kết nối", icon: Settings },
+] as const;
+type Section = (typeof sections)[number]["id"];
+
+const roleLabel = (role: string) => labels[role] || role || "Chưa xác định";
+function stateLabel(value: string) {
+  try {
+    const s = JSON.parse(value);
+    return `${roleLabel(s.role)} · ${s.suspended ? "Đang khóa" : "Hoạt động"}`;
+  } catch {
+    return "Không đọc được trạng thái";
+  }
+}
+const fold = (s: string) => s.toLocaleLowerCase("vi");
+
+function Pager({
+  page,
+  total,
+  onChange,
+}: {
+  page: number;
+  total: number;
+  onChange: (n: number) => void;
+}) {
+  return (
+    <div className="sys-pagination">
+      <span>
+        Trang {page} / {total}
+      </span>
+      <div className="actions">
+        <button
+          className="button small outline"
+          disabled={page <= 1}
+          onClick={() => onChange(page - 1)}
+        >
+          Trước
+        </button>
+        <button
+          className="button small outline"
+          disabled={page >= total}
+          onClick={() => onChange(page + 1)}
+        >
+          Sau
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function SystemAdmin() {
   const [data, setData] = useState<Data | null>(null),
     [error, setError] = useState(""),
+    [notice, setNotice] = useState(""),
+    [section, setSection] = useState<Section>("overview"),
     [query, setQuery] = useState(""),
+    [role, setRole] = useState("all"),
+    [status, setStatus] = useState("all"),
+    [page, setPage] = useState(1),
+    [auditQuery, setAuditQuery] = useState(""),
+    [auditPage, setAuditPage] = useState(1),
     [editing, setEditing] = useState<User | null>(null),
+    [original, setOriginal] = useState<User | null>(null),
     [reason, setReason] = useState(""),
-    [busy, setBusy] = useState(false);
+    [modalError, setModalError] = useState(""),
+    [busy, setBusy] = useState(false),
+    [refreshing, setRefreshing] = useState(false);
+
   const reload = useCallback(async () => {
-    setData(await api("/api/system-admin"));
-    setError("");
+    setRefreshing(true);
+    try {
+      setData(await api("/api/system-admin"));
+      setError("");
+    } finally {
+      setRefreshing(false);
+    }
   }, []);
   useEffect(() => {
-    reload().catch((e) => setError(e.message));
-  }, [reload]);
-  async function save(e: React.FormEvent) {
+    let live = true;
+    api("/api/system-admin")
+      .then((d) => {
+        if (live) setData(d);
+      })
+      .catch((e) => {
+        if (live) setError(e.message);
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  function openEditor(u: User) {
+    setEditing({ ...u });
+    setOriginal(u);
+    setReason("");
+    setModalError("");
+    setNotice("");
+  }
+  function closeEditor() {
+    if (busy) return;
+    setEditing(null);
+    setOriginal(null);
+    setModalError("");
+  }
+  const unchanged =
+    !!editing &&
+    !!original &&
+    editing.role === original.role &&
+    editing.suspended === original.suspended;
+
+  async function save(e: FormEvent) {
     e.preventDefault();
-    if (!editing) return;
+    if (!editing || unchanged) return;
     setBusy(true);
-    setError("");
+    setModalError("");
     try {
       await api("/api/system-admin", {
         user_id: editing.id,
@@ -56,225 +176,509 @@ export function SystemAdmin() {
         suspended: editing.suspended,
         reason,
       });
-      await reload();
       setEditing(null);
+      setOriginal(null);
       setReason("");
-    } catch (e) {
-      setError((e as Error).message);
+      setNotice("Đã lưu quyền truy cập và ghi nhật ký.");
+      await reload().catch((err) => setError((err as Error).message));
+    } catch (err) {
+      setModalError((err as Error).message);
     } finally {
       setBusy(false);
     }
   }
-  return (
-    <main className="page-wrap">
-      <header className="workspace-heading">
-        <div>
-          <div className="eyebrow">
-            <ShieldCheck size={20} /> M FARM · QUẢN TRỊ HỆ THỐNG
-          </div>
-          <h1>Tài khoản & phân quyền</h1>
-          <p>Quản lý quyền truy cập và xem lịch sử thay đổi.</p>
+
+  const users = (data?.users || [])
+    .filter(
+      (u) =>
+        fold(u.name + " " + u.email).includes(fold(query.trim())) &&
+        (role === "all" || u.role === role) &&
+        (status === "all" || (status === "locked" ? u.suspended : !u.suspended)),
+    )
+    .sort((a, b) => a.name.localeCompare(b.name, "vi"));
+  const total = Math.max(1, Math.ceil(users.length / PAGE_SIZE)),
+    current = Math.min(page, total);
+  const person = (id: string) =>
+    data?.users.find((u) => u.id === id)?.email ||
+    (id === "DEMO-SYSTEM" ? "Admin hệ thống (mẫu)" : id);
+  const audits = (data?.audit || []).filter((a) =>
+    fold([person(a.actor_id), person(a.target_id), a.reason].join(" ")).includes(
+      fold(auditQuery.trim()),
+    ),
+  );
+  const auditTotal = Math.max(1, Math.ceil(audits.length / PAGE_SIZE)),
+    auditCurrent = Math.min(auditPage, auditTotal);
+
+  function auditRow(a: Audit) {
+    return (
+      <article className="system-audit" key={a.id}>
+        <div className="sys-audit-heading">
+          <strong>{person(a.target_id)}</strong>
+          <time dateTime={a.created_at}>
+            {new Date(a.created_at).toLocaleString("vi-VN")}
+          </time>
         </div>
-        {data && (
-          <button
-            className="button outline"
-            onClick={async () => {
-              try {
-                await api("/api/auth", { action: "logout" });
-                location.href = "/dang-nhap";
-              } catch (e) {
-                setError((e as Error).message);
-              }
-            }}
-          >
-            Đăng xuất
-          </button>
-        )}
-      </header>
-      {error && (
-        <p className="notice" role="alert">
-          {error}
+        <p>
+          {stateLabel(a.before_state)}{" "}
+          <span aria-label="chuyển thành">→</span> {stateLabel(a.after_state)}
         </p>
-      )}
-      {!data ? (
-        <div className="panel">
-          {error ? (
-            <>
-              <a className="button" href="/dang-nhap">
-                Đăng nhập
-              </a>
-              <a className="button outline" href="/demo">
-                Trải nghiệm mẫu
-              </a>
-            </>
-          ) : (
-            "Đang tải quyền truy cập…"
-          )}
+        <p>Lý do: {a.reason}</p>
+        <small>Người thực hiện: {person(a.actor_id)}</small>
+      </article>
+    );
+  }
+  const status3 = (ok: boolean) => (ok ? "Đã khai báo" : "Chưa cấu hình");
+
+  return (
+    <div className="sys-shell">
+      <aside className="sys-sidebar">
+        <a href="/" className="sys-brand">
+          <Sprout /> M FARM
+        </a>
+        <p>QUẢN TRỊ HỆ THỐNG</p>
+        <nav aria-label="Quản trị hệ thống">
+          {sections.map((s) => (
+            <button
+              key={s.id}
+              aria-current={section === s.id ? "page" : undefined}
+              onClick={() => {
+                setSection(s.id);
+                setNotice("");
+              }}
+            >
+              <s.icon size={19} />
+              {s.name}
+            </button>
+          ))}
+        </nav>
+        <div className="sys-sidebar-foot">
+          <ShieldCheck size={20} />
+          <span>
+            {data?.actor.name || "Khu vực quản trị riêng"}
+            <br />
+            <small>{data?.actor.demo ? "Dữ liệu trải nghiệm (mẫu)" : "M FARM"}</small>
+          </span>
         </div>
-      ) : (
-        <>
-          {data.actor.demo && (
-            <p className="notice">
-              Phiên demo riêng. Thay đổi chỉ áp dụng cho dữ liệu mẫu.
-            </p>
-          )}
-          <div className="stat-grid">
-            <article className="panel">
-              <strong>{data.users.length}</strong>
-              <p>Tài khoản</p>
-            </article>
-            <article className="panel">
-              <strong>{data.users.filter((u) => u.suspended).length}</strong>
-              <p>Đang khóa</p>
-            </article>
+      </aside>
+      <main className="sys-main">
+        <header className="sys-header">
+          <div>
+            <div className="eyebrow">M FARM / HỆ THỐNG</div>
+            <h1>{sections.find((s) => s.id === section)?.name}</h1>
+            <p>Quản lý truy cập và theo dõi hoạt động của M FARM.</p>
           </div>
-          <label className="toolbar">
-            <Search />
-            <input
-              aria-label="Tìm tài khoản"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Tìm tên hoặc email"
-            />
-          </label>
-          <div className="panel" style={{ overflowX: "auto" }}>
-            <table className="system-users">
-              <thead>
-                <tr>
-                  <th>Tài khoản</th>
-                  <th>Vai trò</th>
-                  <th>Xác thực</th>
-                  <th>Trạng thái</th>
-                  <th>Thao tác</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.users
-                  .filter((u) =>
-                    (u.name + u.email)
-                      .toLowerCase()
-                      .includes(query.toLowerCase()),
-                  )
-                  .map((u) => (
-                    <tr key={u.id}>
-                      <td>
-                        <strong>{u.name}</strong>
-                        <br />
-                        {u.email}
-                      </td>
-                      <td>{labels[u.role]}</td>
-                      <td>
-                        Email: {u.email_verified ? "Đã xác thực" : "Chưa"}
-                        <br />
-                        Điện thoại: {u.phone_verified ? "Đã xác thực" : "Chưa"}
-                      </td>
-                      <td>{u.suspended ? "Đang khóa" : "Hoạt động"}</td>
-                      <td>
-                        <button
-                          className="button small outline"
-                          disabled={u.protected}
-                          onClick={() => {
-                            setEditing({ ...u });
-                            setReason("");
-                            setError("");
-                          }}
-                        >
-                          Quản lý
-                        </button>
-                      </td>
-                    </tr>
+          <div className="actions">
+            <button
+              className="button outline"
+              disabled={refreshing}
+              onClick={() => reload().catch((e) => setError(e.message))}
+            >
+              <RefreshCw size={16} />
+              {refreshing ? "Đang tải…" : "Làm mới"}
+            </button>
+            {data && (
+              <button
+                className="button outline"
+                onClick={async () => {
+                  try {
+                    await api("/api/auth", { action: "logout" });
+                    location.href = "/dang-nhap";
+                  } catch (e) {
+                    setError((e as Error).message);
+                  }
+                }}
+              >
+                <LogOut size={16} />
+                Đăng xuất
+              </button>
+            )}
+          </div>
+        </header>
+        {error && (
+          <p className="notice" role="alert">
+            {error}
+          </p>
+        )}
+        {notice && (
+          <p className="notice" role="status">
+            {notice}
+          </p>
+        )}
+        {!data ? (
+          <section className="panel">
+            {error ? (
+              <div className="actions">
+                <a className="button" href="/dang-nhap">
+                  Đăng nhập
+                </a>
+                <a className="button outline" href="/demo">
+                  Trải nghiệm mẫu
+                </a>
+              </div>
+            ) : (
+              "Đang tải dữ liệu…"
+            )}
+          </section>
+        ) : (
+          <>
+            {data.actor.demo && (
+              <p className="notice">
+                Bạn đang dùng dữ liệu mẫu riêng. Thay đổi chỉ áp dụng cho phiên
+                trải nghiệm, không ảnh hưởng tài khoản thật.
+              </p>
+            )}
+            {section === "overview" && (
+              <>
+                <div className="sys-kpis">
+                  {(
+                    [
+                      ["Tài khoản", data.users.length],
+                      ["Chủ trang trại", data.users.filter((u) => u.role === "admin").length],
+                      ["Khách hàng", data.users.filter((u) => u.role === "customer").length],
+                      ["Đang khóa", data.users.filter((u) => u.suspended).length],
+                    ] as const
+                  ).map(([label, value]) => (
+                    <article className="panel" key={label}>
+                      <p>{label}</p>
+                      <strong>{value}</strong>
+                    </article>
                   ))}
-              </tbody>
-            </table>
-          </div>
-          {editing && (
-            <form className="panel" onSubmit={save}>
-              <h2>Quản lý {editing.name}</h2>
-              <p>{editing.email}</p>
-              <fieldset disabled={busy}>
+                </div>
+                <div className="sys-two">
+                  <section className="panel">
+                    <h2>Không gian M FARM</h2>
+                    <p>
+                      Số liệu trong không gian hiện tại
+                      {data.actor.demo ? " (mẫu)" : ""}.
+                    </p>
+                    <dl className="sys-details">
+                      <div>
+                        <dt>Cây và vật nuôi</dt>
+                        <dd>{data.overview.assets}</dd>
+                      </div>
+                      <div>
+                        <dt>Đơn mua gói</dt>
+                        <dd>{data.overview.orders}</dd>
+                      </div>
+                      <div>
+                        <dt>Gói đang mở bán</dt>
+                        <dd>{data.overview.packages}</dd>
+                      </div>
+                      <div>
+                        <dt>Ảnh chăm sóc</dt>
+                        <dd>{data.overview.images}</dd>
+                      </div>
+                    </dl>
+                    <p className="sys-muted">
+                      Chủ trại quản lý cây/con, giá và gói nuôi trong khu vực trang
+                      trại. Admin hệ thống chỉ xem số liệu tổng hợp.
+                    </p>
+                  </section>
+                  <section className="panel">
+                    <h2>Cần chú ý</h2>
+                    <p>
+                      {
+                        data.users.filter(
+                          (u) =>
+                            !u.email_verified ||
+                            (u.role === "customer" && !u.phone_verified),
+                        ).length
+                      }{" "}
+                      tài khoản còn thiếu xác thực theo vai trò.
+                    </p>
+                    <p>
+                      {data.users.filter((u) => u.suspended).length} tài khoản đang
+                      khóa truy cập.
+                    </p>
+                    <button
+                      className="button outline"
+                      onClick={() => setSection("users")}
+                    >
+                      Xem danh sách tài khoản
+                    </button>
+                    <p className="sys-muted">
+                      Danh sách gồm tài khoản đã được ghi nhận trong M FARM, không
+                      phải toàn bộ người dùng ở dịch vụ xác thực.
+                    </p>
+                  </section>
+                </div>
+                <section className="panel">
+                  <div className="sys-audit-heading">
+                    <h2>Thay đổi gần đây</h2>
+                    <button
+                      className="button small outline"
+                      onClick={() => setSection("audit")}
+                    >
+                      Xem nhật ký
+                    </button>
+                  </div>
+                  {data.audit.slice(0, 3).map(auditRow)}
+                  {!data.audit.length && <p>Chưa có thay đổi phân quyền.</p>}
+                </section>
+              </>
+            )}
+            {section === "users" && (
+              <section className="panel">
+                <h2>Tài khoản &amp; quyền truy cập</h2>
+                <div className="sys-filters">
+                  <label>
+                    Tìm tài khoản
+                    <input
+                      value={query}
+                      onChange={(e) => {
+                        setQuery(e.target.value);
+                        setPage(1);
+                      }}
+                      placeholder="Tên hoặc email"
+                    />
+                  </label>
+                  <label>
+                    Vai trò
+                    <select
+                      value={role}
+                      onChange={(e) => {
+                        setRole(e.target.value);
+                        setPage(1);
+                      }}
+                    >
+                      <option value="all">Tất cả vai trò</option>
+                      {Object.entries(labels).map(([v, l]) => (
+                        <option key={v} value={v}>
+                          {l}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Trạng thái
+                    <select
+                      value={status}
+                      onChange={(e) => {
+                        setStatus(e.target.value);
+                        setPage(1);
+                      }}
+                    >
+                      <option value="all">Tất cả trạng thái</option>
+                      <option value="active">Hoạt động</option>
+                      <option value="locked">Đang khóa</option>
+                    </select>
+                  </label>
+                </div>
+                <p className="sys-muted" aria-live="polite">
+                  {users.length} kết quả · Sắp xếp theo tên
+                </p>
+                <div className="sys-table-wrap">
+                  <table className="system-users">
+                    <thead>
+                      <tr>
+                        <th>Tài khoản</th>
+                        <th>Vai trò</th>
+                        <th>Xác thực</th>
+                        <th>Trạng thái</th>
+                        <th>Thao tác</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users
+                        .slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE)
+                        .map((u) => (
+                          <tr key={u.id}>
+                            <td>
+                              <strong>{u.name}</strong>
+                              <br />
+                              <small>{u.email}</small>
+                            </td>
+                            <td>{roleLabel(u.role)}</td>
+                            <td>
+                              Email: {u.email_verified ? "Đã xác thực" : "Chưa"}
+                              <br />
+                              Điện thoại: {u.phone_verified ? "Đã xác thực" : "Chưa"}
+                            </td>
+                            <td>
+                              <span className={u.suspended ? "sys-badge locked" : "sys-badge"}>
+                                {u.suspended ? "Đang khóa" : "Hoạt động"}
+                              </span>
+                            </td>
+                            <td>
+                              {u.protected ? (
+                                <span className="sys-muted">
+                                  {u.id === data.actor.id ? "Tài khoản của bạn" : "Được bảo vệ"}
+                                </span>
+                              ) : !u.email_verified ? (
+                                <span className="sys-muted">Chờ xác thực email</span>
+                              ) : (
+                                <button
+                                  className="button small outline"
+                                  onClick={() => openEditor(u)}
+                                >
+                                  Quản lý
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                  {!users.length && (
+                    <p className="sys-empty">Không có tài khoản phù hợp bộ lọc.</p>
+                  )}
+                </div>
+                <Pager page={current} total={total} onChange={setPage} />
+              </section>
+            )}
+            {section === "audit" && (
+              <section className="panel">
+                <h2>Lịch sử thay đổi quyền</h2>
+                <p>
+                  100 thay đổi gần nhất trong không gian hiện tại. Ghi cả trạng thái
+                  trước và sau cùng lý do.
+                </p>
                 <label className="field">
-                  <span>Vai trò</span>
-                  <select
-                    value={editing.role}
-                    onChange={(e) =>
-                      setEditing({ ...editing, role: e.target.value })
-                    }
-                  >
-                    <option value="customer">Khách hàng</option>
-                    <option value="admin">Chủ trang trại</option>
-                  </select>
-                </label>
-                <label className="field">
-                  <span>Trạng thái truy cập</span>
-                  <select
-                    value={String(editing.suspended)}
-                    onChange={(e) =>
-                      setEditing({
-                        ...editing,
-                        suspended: e.target.value === "true",
-                      })
-                    }
-                  >
-                    <option value="false">Hoạt động</option>
-                    <option value="true">Khóa truy cập</option>
-                  </select>
-                </label>
-                <label className="field">
-                  <span>Lý do thay đổi</span>
-                  <textarea
-                    required
-                    minLength={5}
-                    maxLength={1000}
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
+                  <span>Tìm nhật ký</span>
+                  <input
+                    value={auditQuery}
+                    onChange={(e) => {
+                      setAuditQuery(e.target.value);
+                      setAuditPage(1);
+                    }}
+                    placeholder="Email người thực hiện, tài khoản hoặc lý do"
                   />
                 </label>
-                <p className="notice">
-                  Thay đổi có hiệu lực ở yêu cầu tiếp theo. Khóa tài khoản không
-                  xóa dữ liệu đã mua. Hạ xuống khách hàng yêu cầu xác thực điện
-                  thoại.
-                </p>
-                <div className="actions">
-                  <button className="button" type="submit">
-                    {busy ? "Đang lưu…" : "Lưu thay đổi quyền"}
-                  </button>
-                  <button
-                    className="button outline"
-                    type="button"
-                    onClick={() => setEditing(null)}
-                  >
-                    Hủy
-                  </button>
-                </div>
-              </fieldset>
-            </form>
-          )}
-          <section className="panel">
-            <h2>Lịch sử phân quyền</h2>
-            <p>100 thay đổi gần nhất.</p>
-            {data.audit.map((a) => (
-              <article className="system-audit" key={a.id}>
-                <strong>
-                  {data.users.find((u) => u.id === a.target_id)?.email ||
-                    a.target_id}
-                </strong>
-                <p>{a.reason}</p>
-                <small>
-                  {new Date(a.created_at).toLocaleString("vi-VN")} · Người thực
-                  hiện:{" "}
-                  {data.users.find((u) => u.id === a.actor_id)?.email ||
-                    a.actor_id}
-                </small>
-                <p>
-                  {labels[JSON.parse(a.after_state).role]} ·{" "}
-                  {JSON.parse(a.after_state).suspended ? "Khóa" : "Hoạt động"}
-                </p>
-              </article>
-            ))}
-            {!data.audit.length && <p>Chưa có thay đổi.</p>}
-          </section>
-        </>
-      )}
-    </main>
+                {audits
+                  .slice((auditCurrent - 1) * PAGE_SIZE, auditCurrent * PAGE_SIZE)
+                  .map(auditRow)}
+                {!audits.length && <p className="sys-empty">Chưa có nhật ký phù hợp.</p>}
+                <Pager page={auditCurrent} total={auditTotal} onChange={setAuditPage} />
+              </section>
+            )}
+            {section === "settings" && (
+              <div className="sys-two">
+                <section className="panel">
+                  <h2>Kết nối &amp; cấu hình</h2>
+                  <p>
+                    Chỉ hiển thị trạng thái đã khai báo hay chưa; không hiển thị giá
+                    trị bí mật và chưa thay thế kiểm thử gửi mã thực tế.
+                  </p>
+                  <dl className="sys-details">
+                    <div>
+                      <dt>Dịch vụ xác thực</dt>
+                      <dd>{status3(data.connections.auth)}</dd>
+                    </div>
+                    <div>
+                      <dt>Email chủ trang trại</dt>
+                      <dd>{status3(data.connections.owner)}</dd>
+                    </div>
+                    <div>
+                      <dt>Email admin hệ thống</dt>
+                      <dd>{status3(data.connections.systemAdmin)}</dd>
+                    </div>
+                    <div>
+                      <dt>Zalo ZNS</dt>
+                      <dd>Chờ tích hợp</dd>
+                    </div>
+                  </dl>
+                </section>
+                <section className="panel">
+                  <h2>Phạm vi quyền</h2>
+                  <p>
+                    <strong>Admin hệ thống:</strong> quản lý truy cập, xem số liệu
+                    tổng hợp và nhật ký. Không thao tác nghiệp vụ trang trại.
+                  </p>
+                  <p>
+                    <strong>Chủ trang trại:</strong> quản lý cây/con, chăm sóc, khách
+                    hàng và gói nuôi.
+                  </p>
+                  <p>
+                    <strong>Khách hàng:</strong> xem cây/con và thông tin thuộc quyền
+                    sở hữu.
+                  </p>
+                  <p className="notice">
+                    MFA và quản lý phiên theo thiết bị chưa được tích hợp. M FARM hiện
+                    có một không gian trang trại chung.
+                  </p>
+                </section>
+              </div>
+            )}
+          </>
+        )}
+        <Dialog
+          open={!!editing}
+          onOpenChange={(open) => {
+            if (!open) closeEditor();
+          }}
+        >
+          <DialogContent showCloseButton={!busy} className="sys-dialog">
+            <DialogTitle>Quản lý quyền truy cập</DialogTitle>
+            <DialogDescription>
+              {editing?.name} · {editing?.email}
+            </DialogDescription>
+            {editing && original && (
+              <form onSubmit={save}>
+                <fieldset disabled={busy}>
+                  <label className="field">
+                    <span>Vai trò</span>
+                    <select
+                      value={editing.role}
+                      onChange={(e) => setEditing({ ...editing, role: e.target.value })}
+                    >
+                      <option value="customer">Khách hàng</option>
+                      <option value="admin">Chủ trang trại</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Trạng thái</span>
+                    <select
+                      value={String(editing.suspended)}
+                      onChange={(e) =>
+                        setEditing({ ...editing, suspended: e.target.value === "true" })
+                      }
+                    >
+                      <option value="false">Hoạt động</option>
+                      <option value="true">Khóa truy cập</option>
+                    </select>
+                  </label>
+                  <p className="sys-muted">
+                    Trước: {roleLabel(original.role)} ·{" "}
+                    {original.suspended ? "Đang khóa" : "Hoạt động"}{" "}
+                    <span aria-label="chuyển thành">→</span> Sau:{" "}
+                    {roleLabel(editing.role)} · {editing.suspended ? "Đang khóa" : "Hoạt động"}
+                  </p>
+                  <label className="field">
+                    <span>Lý do thay đổi</span>
+                    <textarea
+                      required
+                      minLength={5}
+                      maxLength={1000}
+                      value={reason}
+                      onChange={(e) => setReason(e.target.value)}
+                    />
+                  </label>
+                  <p className="notice">
+                    Quyền có hiệu lực ở yêu cầu tiếp theo. Chủ trại được quản lý toàn
+                    bộ dữ liệu trang trại chung. Khách hàng cần xác thực cả email và
+                    điện thoại. Khóa không xóa đơn hàng hay tài sản.
+                    {data?.actor.demo ? " Đây là dữ liệu mẫu." : ""}
+                  </p>
+                  {modalError && <p role="alert">{modalError}</p>}
+                  <div className="actions">
+                    <button
+                      className="button"
+                      type="submit"
+                      disabled={unchanged || reason.trim().length < 5}
+                    >
+                      {busy ? "Đang lưu…" : "Lưu thay đổi quyền"}
+                    </button>
+                    <button className="button outline" type="button" onClick={closeEditor}>
+                      Hủy
+                    </button>
+                  </div>
+                  {unchanged && <p className="sys-muted">Chưa có thay đổi để lưu.</p>}
+                </fieldset>
+              </form>
+            )}
+          </DialogContent>
+        </Dialog>
+      </main>
+    </div>
   );
 }

@@ -107,6 +107,17 @@ assert.equal(
   404,
 );
 assert.equal((await fetch(base + "/api/log-images/" + imageId)).status, 401);
+const logout = await fetch(base + "/api/auth", {
+  method: "POST",
+  headers: { origin: base, cookie, "content-type": "application/json" },
+  body: JSON.stringify({ action: "logout" }),
+});
+assert.equal(logout.status, 200);
+assert.deepEqual(await logout.json(), { ok: true });
+const cleared = logout.headers.getSetCookie();
+assert(cleared.some((c) => c.startsWith("mf_access=") && c.includes("Max-Age=0")));
+assert(cleared.some((c) => c.startsWith("mf_refresh=") && c.includes("Max-Age=0")));
+assert(cleared.some((c) => c.startsWith("mf_demo=") && c.includes("Max-Age=0")));
 console.log(
-  "PASS: growth sync; explicit health; food/blank preserve weight; invalid data no log; JSON route sync; owner/customer photo access; cross-tenant and anonymous denied.",
+  "PASS: growth sync; explicit health; food/blank preserve weight; invalid data no log; JSON route sync; owner/customer photo access; cross-tenant and anonymous denied; logout clears auth cookies.",
 );

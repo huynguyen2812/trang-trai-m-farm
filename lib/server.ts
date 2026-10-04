@@ -147,7 +147,8 @@ export async function authFetch(
       ...(data ? { body: JSON.stringify(data) } : {}),
     },
   );
-  const out = (await r.json()) as any;
+  if (r.status === 204) return null;
+  const out = (await r.json().catch(() => null)) as any;
   if (!r.ok) {
     if (r.status === 429)
       throw new ApiError(429, "Vui lòng chờ trước khi yêu cầu mã mới.");
@@ -188,10 +189,12 @@ export async function actor(req: Request): Promise<Actor> {
         tenant: session.tenant,
         id: demoId,
         name:
-          session.role === "admin"
-            ? "Chủ trang trại (mẫu)"
-            : "Nguyễn Minh Anh (mẫu)",
-        email: "minhanh@example.com",
+          session.role === "system_admin"
+            ? "Admin hệ thống (mẫu)"
+            : session.role === "admin"
+              ? "Chủ trang trại (mẫu)"
+              : "Nguyễn Minh Anh (mẫu)",
+        email: session.role === "system_admin" ? "demo-system@example.com" : "minhanh@example.com",
         role: access ? resolved : session.role,
         demo: true,
       };

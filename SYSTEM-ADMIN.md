@@ -22,10 +22,19 @@ Chưa chọn email admin thật, chưa sửa cấu hình production và chưa tr
 - Demo được tách tenant; đổi vai trò trong demo không cấp quyền trên dữ liệu thật.
 - Đã sửa cờ xác thực điện thoại để không mặc định đánh dấu chủ trại đã xác thực điện thoại.
 
+## Giao diện `/he-thong`
+- Tổng quan: số tài khoản theo vai trò/khóa, số cây/con, đơn, gói đang mở bán, ảnh chăm sóc — đếm theo tenant hiện tại (demo chỉ thấy số liệu mẫu của phiên).
+- Tài khoản: tìm theo tên/email, lọc vai trò/trạng thái, phân trang 10 dòng (phía client), hộp thoại đổi vai trò/khóa có xem trước trạng thái trước → sau và bắt buộc lý do ≥ 5 ký tự. Tài khoản của chính mình, admin hệ thống và tài khoản chưa xác thực email không có nút sửa.
+- Nhật ký: 100 bản ghi gần nhất, lưu `before_state`/`after_state` chuẩn hóa `{role,suspended:boolean}` và lý do; tìm kiếm + phân trang.
+- Thiết lập: chỉ trả về boolean đã/chưa khai báo (`SUPABASE_URL`+`SUPABASE_ANON_KEY`, `OWNER_EMAIL`, `SYSTEM_ADMIN_EMAILS`); không trả giá trị. Zalo ZNS: chờ tích hợp.
+- API không trả số điện thoại, tenant hay email của người thực hiện; yêu cầu không thay đổi gì bị từ chối (400) và không ghi nhật ký.
+- `SYSTEM_ADMIN_EMAILS` chỉ có hiệu lực ở tenant `production`; tenant demo không kế thừa.
+
 ## Kiểm thử
-`node scripts/test-system-admin.mjs` khi server local chạy cổng 5173: từ chối khách/chủ trại/người chưa đăng nhập; cho phép system admin; không cấp system role qua API; khóa/mở có hiệu lực; audit được ghi.
-`node scripts/regression-farm.mjs`: các chức năng nhật ký và ảnh hiện có vẫn qua kiểm tra.
-TypeScript và build đã qua. Đã thử đổi quyền trên giao diện demo.
+`node scripts/test-system-admin.mjs` khi server local chạy cổng 5173 (hoặc `MF_TEST_URL` local): từ chối khách/chủ trại/người chưa đăng nhập (đọc và ghi); cho phép system admin; số liệu tổng quan khớp dữ liệu chủ trại cùng tenant; cấu hình chỉ boolean; không cấp system role qua API; kiểm tra lý do, no-op, origin, tự sửa; khóa/mở/nâng quyền có hiệu lực; audit trước/sau được ghi; tenant demo cô lập.
+`node scripts/regression-farm.mjs`: các chức năng nhật ký, ảnh, sức khỏe, vaccine, QR/chip và logout cookie hiện có vẫn qua kiểm tra.
+Lưu ý: `/api/demo` giới hạn 20 yêu cầu/10 phút/IP; hai script dùng khoảng 11 lần.
+Bản tích hợp giao diện/API mới đã được Codex chạy độc lập: typecheck, build, kiểm thử system admin và regression đều PASS. Chi tiết ở `CODEX-VERIFICATION.md`.
 
 ## Hạn chế cần xử lý trước production
-Chưa có MFA, thu hồi refresh token khi đăng xuất, quản lý thiết bị hay giao diện cấp nhiều admin hệ thống. Mô hình dữ liệu thật vẫn là một trang trại trong tenant `production`, chưa phải nền tảng nhiều trang trại độc lập. Không coi việc thêm vai trò này là hoàn tất kiểm toán bảo mật production.
+Chưa có MFA, quản lý thiết bị hay giao diện cấp nhiều admin hệ thống. Logout phiên thật đã gọi best-effort tới Supabase GoTrue `logout?scope=local` và vẫn xóa cookie cục bộ; việc provider thực sự thu hồi refresh token còn cần kiểm tra bằng project Supabase thật. Mô hình dữ liệu thật vẫn là một trang trại trong tenant `production`, chưa phải nền tảng nhiều trang trại độc lập. Không coi việc thêm vai trò này là hoàn tất kiểm toán bảo mật production.

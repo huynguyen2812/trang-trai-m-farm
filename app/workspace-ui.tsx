@@ -88,7 +88,9 @@ type Field = {
   key: string;
   label: string;
   type?: string;
-  options?: [string, string][];
+  options?: [string, string][] | ((values: Record<string, any>) => [string, string][]);
+  dependsOn?: string;
+  resetOnChange?: string[];
   required?: boolean;
   wide?: boolean;
   disabled?: boolean;
@@ -253,15 +255,20 @@ function EntryForm({
                 {f.type === "select" ? (
                   <Select
                     value={String(values[f.key] ?? "")}
-                    onValueChange={(v) => setValues({ ...values, [f.key]: v })}
-                    disabled={f.disabled}
+                    onValueChange={(v) => setValues((current) => {
+                      const next = { ...current, [f.key]: v };
+                      if (current[f.key] !== v)
+                        for (const key of f.resetOnChange || []) next[key] = "";
+                      return next;
+                    })}
+                    disabled={f.disabled || (!!f.dependsOn && !values[f.dependsOn])}
                     required={f.required !== false}
                   >
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Chọn…" />
                     </SelectTrigger>
                     <SelectContent>
-                      {f.options?.map(([v, l]) => (
+                      {(typeof f.options === "function" ? f.options(values) : f.options)?.map(([v, l]) => (
                         <SelectItem key={v} value={v}>
                           {l}
                         </SelectItem>
@@ -852,6 +859,7 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
           key: "asset_id",
           label: "Cây / con đang mở bán",
           type: "select",
+          resetOnChange: ["package_id"],
           options: data?.assets
             .filter((a) => a.status === "available")
             .map((a) => [a.id, a.id + " · " + a.species]),
@@ -860,9 +868,13 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
           key: "package_id",
           label: "Gói chăm sóc cùng giống",
           type: "select",
-          options: data?.packages
-            .filter((p) => p.active)
-            .map((p) => [p.id, p.name + " · " + money(p.price)]),
+          dependsOn: "asset_id",
+          options: (values) => {
+            const selected = data?.assets.find((asset) => asset.id === values.asset_id);
+            return (data?.packages || [])
+              .filter((p) => p.active && p.kind === selected?.kind && p.species === selected?.species)
+              .map((p) => [p.id, p.name + " · " + money(p.price)]);
+          },
         },
         {
           key: "customer_id",
