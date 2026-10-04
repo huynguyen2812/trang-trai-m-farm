@@ -6,6 +6,8 @@ import {
   db,
   first,
   json,
+  journalAssetUpdates,
+  journalHealthNote,
   media,
   newId,
   now,
@@ -42,10 +44,19 @@ export const POST = (req: Request) =>
     const form = await req.formData();
     const assetId = value(form, "asset_id", 200);
     const kind = value(form, "kind", 40);
-    if (!kinds.has(kind)) throw new ApiError(400, "Loại cập nhật không hợp lệ.");
+    if (!kinds.has(kind))
+      throw new ApiError(400, "Loại cập nhật không hợp lệ.");
     const title = value(form, "title", 200);
     const note = value(form, "body", 5000);
     const metric = value(form, "metric", 100, false);
+    const health = value(form, "health", 30, false);
+    const assetUpdates = journalAssetUpdates(
+      a.tenant,
+      assetId,
+      kind,
+      metric,
+      health,
+    );
     const files = form
       .getAll("images")
       .filter((item): item is File => item instanceof File && item.size > 0);
@@ -80,23 +91,35 @@ export const POST = (req: Request) =>
     try {
       for (const file of files) {
         const imageId = newId("ANH");
-        const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+        const extension =
+          file.type === "image/png"
+            ? "png"
+            : file.type === "image/webp"
+              ? "webp"
+              : "jpg";
         const key = `${a.tenant}/${assetId}/${logId}/${imageId}.${extension}`;
         await media().put(key, file.stream(), {
           httpMetadata: { contentType: file.type },
           customMetadata: { tenant: a.tenant, assetId, logId },
         });
         uploaded.push(key);
-        imageRows.push({ id: imageId, key, type: file.type, name: file.name.slice(0, 180), size: file.size });
+        imageRows.push({
+          id: imageId,
+          key,
+          type: file.type,
+          name: file.name.slice(0, 180),
+          size: file.size,
+        });
       }
       await db().batch([
+        ...assetUpdates,
         statement(
           "INSERT INTO logs (tenant,id,asset_id,title,body,kind,metric,image_url,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
           a.tenant,
           logId,
           assetId,
           title,
-          note,
+          journalHealthNote(note, health),
           kind,
           metric,
           "",

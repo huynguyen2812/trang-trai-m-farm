@@ -16,7 +16,7 @@ export const POST = (req: Request) =>
     checkOrigin(req);
     await rateLimit(req);
     const input = await body(req);
-    const role = input.role === "admin" ? "admin" : "customer";
+    const role = input.role === "system_admin" ? "system_admin" : input.role === "admin" ? "admin" : "customer";
     const existing = cookie(req, "mf_demo");
     if (existing) {
       const s = await first(

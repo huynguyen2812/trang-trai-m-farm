@@ -192,3 +192,6 @@ export const rateLimits = sqliteTable("rate_limits", {
   count: integer("count").notNull(),
   expires_at: integer("expires_at").notNull(),
 });
+
+export const accountAccess = sqliteTable("account_access", {tenant:tenant(),user_id:text("user_id").notNull(),role:text("role").notNull(),suspended:integer("suspended").notNull().default(0),updated_at:text("updated_at").notNull()},t=>[primaryKey({columns:[t.tenant,t.user_id]})]);
+export const accessAudit = sqliteTable("access_audit", {tenant:tenant(),id:text("id").notNull(),actor_id:text("actor_id").notNull(),target_id:text("target_id").notNull(),before_state:text("before_state").notNull(),after_state:text("after_state").notNull(),reason:text("reason").notNull(),created_at:text("created_at").notNull()},t=>[primaryKey({columns:[t.tenant,t.id]})]);

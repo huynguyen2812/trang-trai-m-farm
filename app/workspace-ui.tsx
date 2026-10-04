@@ -1,4 +1,7 @@
 "use client";
+import Link from "next/link";
+import type { LucideIcon } from "lucide-react";
+import { AssetCover } from "./asset-cover";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Sprout,
@@ -156,7 +159,13 @@ function Stats({ items }: { items: [string, string, string][] }) {
     </div>
   );
 }
-function Logs({ logs, images }: { logs: State["logs"]; images: State["log_images"] }) {
+function Logs({
+  logs,
+  images,
+}: {
+  logs: State["logs"];
+  images: State["log_images"];
+}) {
   return logs.length ? (
     <div className="timeline">
       {logs.map((l) => (
@@ -185,7 +194,13 @@ function Logs({ logs, images }: { logs: State["logs"]; images: State["log_images
                   />
                 ))}
               {l.image_url && (
-                <img src={l.image_url} className="detail-photo" loading="lazy" alt={l.title} referrerPolicy="no-referrer" />
+                <img
+                  src={l.image_url}
+                  className="detail-photo"
+                  loading="lazy"
+                  alt={l.title}
+                  referrerPolicy="no-referrer"
+                />
               )}
             </div>
           )}
@@ -281,24 +296,44 @@ function EntryForm({
                       onChange={(e) => {
                         const incoming = Array.from(e.target.files || []);
                         const current = (values[f.key] || []) as File[];
-                        setValues({ ...values, [f.key]: [...current, ...incoming].slice(0, 6) });
+                        setValues({
+                          ...values,
+                          [f.key]: [...current, ...incoming].slice(0, 6),
+                        });
                         e.currentTarget.value = "";
                       }}
                     />
-                    <label htmlFor="daily-update-images" className="photo-picker-button">
+                    <label
+                      htmlFor="daily-update-images"
+                      className="photo-picker-button"
+                    >
                       <Camera size={20} />
                       Chụp hoặc chọn ảnh
                     </label>
-                    <small>Tối đa 6 ảnh JPG, PNG hoặc WebP; mỗi ảnh dưới 8 MB.</small>
+                    <small>
+                      Tối đa 6 ảnh JPG, PNG hoặc WebP; mỗi ảnh dưới 8 MB.
+                    </small>
                     {!!values[f.key]?.length && (
                       <div className="photo-preview-grid">
                         {(values[f.key] as File[]).map((file, index) => (
-                          <figure key={`${file.name}-${file.lastModified}-${index}`}>
-                            <img src={URL.createObjectURL(file)} alt={`Ảnh đã chọn ${index + 1}`} />
+                          <figure
+                            key={`${file.name}-${file.lastModified}-${index}`}
+                          >
+                            <img
+                              src={URL.createObjectURL(file)}
+                              alt={`Ảnh đã chọn ${index + 1}`}
+                            />
                             <button
                               type="button"
                               aria-label={`Bỏ ảnh ${index + 1}`}
-                              onClick={() => setValues({ ...values, [f.key]: (values[f.key] as File[]).filter((_, i) => i !== index) })}
+                              onClick={() =>
+                                setValues({
+                                  ...values,
+                                  [f.key]: (values[f.key] as File[]).filter(
+                                    (_, i) => i !== index,
+                                  ),
+                                })
+                              }
                             >
                               <X size={15} />
                             </button>
@@ -438,14 +473,31 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
     try {
       if (action === "addLog") {
         const formData = new FormData();
-        for (const key of ["asset_id", "title", "body", "kind", "metric"])
-          formData.set(key, String(values[key] || ""));
-        for (const image of (values.images || []) as File[]) formData.append("images", image);
-        const response = await fetch("/api/log-images", { method: "POST", body: formData });
+        for (const key of [
+          "asset_id",
+          "title",
+          "body",
+          "kind",
+          "metric",
+          "health",
+        ])
+          formData.set(
+            key,
+            String(values[key] === "unchanged" ? "" : values[key] || ""),
+          );
+        for (const image of (values.images || []) as File[])
+          formData.append("images", image);
+        const response = await fetch("/api/log-images", {
+          method: "POST",
+          body: formData,
+        });
         const result: any = await response.json();
-        if (!response.ok) throw new Error(result.error || "Không thể lưu cập nhật.");
+        if (!response.ok)
+          throw new Error(result.error || "Không thể lưu cập nhật.");
       } else if (action === "saveAsset") {
-        const { images = [], ...assetValues } = values as { images?: File[] } & Record<string, any>;
+        const { images = [], ...assetValues } = values as {
+          images?: File[];
+        } & Record<string, any>;
         await api("/api/app", { action, data: assetValues, ...extra });
         if (images.length) {
           const formData = new FormData();
@@ -510,8 +562,8 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
             status: "available",
             health: "healthy",
             progress: 0,
-          weight: "",
-          images: [],
+            weight: "",
+            images: [],
             started_at: isoDay(),
             expected_at: new Date(Date.now() + 120 * 86400000)
               .toISOString()
@@ -661,7 +713,18 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
           wide: true,
           max: 5000,
         },
-        { key: "metric", label: "Chỉ số ghi nhận", required: false },
+        {
+          key: "metric",
+          label: "Chỉ số (Sinh trưởng sẽ cập nhật hồ sơ)",
+          required: false,
+        },
+        {
+          key: "health",
+          label: "Tình trạng sau khi kiểm tra",
+          type: "select",
+          required: false,
+          options: [["unchanged", "Giữ nguyên"], ...healthOptions],
+        },
         {
           key: "images",
           label: "Ảnh cây / vật nuôi",
@@ -701,10 +764,27 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
         { key: "vaccine_name", label: "Tên vaccine", wide: true },
         { key: "dose_label", label: "Mũi tiêm" },
         { key: "administered_at", label: "Ngày tiêm", type: "date" },
-        { key: "next_due_at", label: "Ngày nhắc tiếp theo", type: "date", required: false },
+        {
+          key: "next_due_at",
+          label: "Ngày nhắc tiếp theo",
+          type: "date",
+          required: false,
+        },
         { key: "batch_number", label: "Số lô vaccine", required: false },
-        { key: "provider", label: "Người / đơn vị thực hiện", required: false, wide: true },
-        { key: "note", label: "Ghi chú sau tiêm", type: "textarea", required: false, wide: true, max: 2000 },
+        {
+          key: "provider",
+          label: "Người / đơn vị thực hiện",
+          required: false,
+          wide: true,
+        },
+        {
+          key: "note",
+          label: "Ghi chú sau tiêm",
+          type: "textarea",
+          required: false,
+          wide: true,
+          max: 2000,
+        },
       ],
     });
   }
@@ -728,7 +808,9 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
           key: "asset_id",
           label: "Vật nuôi",
           type: "select",
-          options: data?.assets.filter((asset) => asset.kind === "animal").map((asset) => [asset.id, `${asset.id} · ${asset.name}`]),
+          options: data?.assets
+            .filter((asset) => asset.kind === "animal")
+            .map((asset) => [asset.id, `${asset.id} · ${asset.name}`]),
           disabled: !!assetId,
         },
         {
@@ -747,7 +829,14 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
         { key: "electronic_code", label: "Mã RFID / chip", required: false },
         { key: "placement", label: "Vị trí gắn" },
         { key: "attached_at", label: "Ngày gắn", type: "date" },
-        { key: "note", label: "Ghi chú", type: "textarea", required: false, wide: true, max: 1000 },
+        {
+          key: "note",
+          label: "Ghi chú",
+          type: "textarea",
+          required: false,
+          wide: true,
+          max: 1000,
+        },
       ],
     });
   }
@@ -835,7 +924,7 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
           <h2>Vào trang trại của bạn</h2>
           <p>{error || "Vui lòng đăng nhập để tiếp tục."}</p>
           <div className="actions" style={{ justifyContent: "center" }}>
-            <a href="/dang-nhap" className="button">
+            <a href={"/dang-nhap" + (typeof window !== "undefined" && new URLSearchParams(location.search).get("asset") ? "?asset=" + encodeURIComponent(new URLSearchParams(location.search).get("asset")!) : "")} className="button">
               Đăng nhập & xác thực
             </a>
             <a href="/demo" className="button outline">
@@ -878,7 +967,7 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
         </div>
       </div>
     );
-  const menus = isAdmin
+  const menus: [string, string, LucideIcon][] = isAdmin
     ? [
         ["overview", "Tổng quan", LayoutDashboard],
         ["assets", "Cây & vật nuôi", Sprout],
@@ -916,14 +1005,12 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
     <div className="card-grid">
       {filtered.map((asset) => (
         <article className="catalog-card" key={asset.id}>
-          <div className={"catalog-art " + asset.kind} style={{ height: 110 }}>
-            <span className="eyebrow" style={{ margin: 0 }}>
-              {asset.id} · {asset.kind === "plant" ? "CÂY TRỒNG" : "VẬT NUÔI"}
-            </span>
-            {asset.kind === "plant" ? <Sprout /> : <Bird />}
-          </div>
+          <AssetCover asset={asset} images={data.log_images} />
           <div className="catalog-body">
-            <Badge value={asset.health} />
+            <div className="asset-card-meta">
+              <span>{asset.id}</span>
+              <Badge value={asset.health} />
+            </div>
             <h3>{asset.name}</h3>
             <p className="muted" style={{ fontSize: 14 }}>
               {asset.location} · {asset.weight}
@@ -939,6 +1026,14 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
               />
             </div>
             <p className="muted" style={{ fontSize: 12, marginTop: 14 }}>
+              Cập nhật gần nhất:{" "}
+              {data.logs.find((log) => log.asset_id === asset.id)
+                ? date(
+                    data.logs.find((log) => log.asset_id === asset.id)!
+                      .created_at,
+                  )
+                : "Chưa có nhật ký"}
+              <br />
               Dự kiến đến kỳ: {date(asset.expected_at)}
             </p>
             <button
@@ -1012,82 +1107,101 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
     </div>
   );
   return (
-    <SidebarProvider>
-      <Sidebar>
-        <SidebarHeader>
-          <a href="/" className="brand sidebar-brand">
-            <Sprout />M FARM
-          </a>
-          <span
-            style={{ fontSize: 12, color: "#bdd0be", padding: "0 20px 20px" }}
-          >
-            {isAdmin ? "ĐIỀU HÀNH TRANG TRẠI" : "KHÔNG GIAN CỦA BẠN"}
-          </span>
-        </SidebarHeader>
-        <SidebarContent style={{ padding: "0 12px" }}>
-          {isAdmin && (
-            <a href="/cap-nhat" className="button lime" style={{ margin: "0 8px 14px" }}>
-              <Camera size={18} /> Cập nhật nhanh trên điện thoại
+    <SidebarProvider
+      className={
+        isAdmin
+          ? "farm-workspace owner-workspace"
+          : "farm-workspace customer-workspace"
+      }
+    >
+      {isAdmin && (
+        <Sidebar>
+          <SidebarHeader>
+            <a href="/" className="brand sidebar-brand">
+              <Sprout />M FARM
             </a>
-          )}
-          <SidebarMenu>
-            {menus.map(([key, label, Icon]: any) => (
-              <SidebarMenuItem key={key}>
-                <SidebarMenuButton
-                  isActive={section === key}
-                  onClick={() => {
-                    setSection(key);
-                    setQuery("");
-                    setStatus("all");
-                  }}
-                  style={{ padding: "23px 13px", fontSize: 14 }}
-                >
-                  <Icon />
-                  <span>{label}</span>
-                  {key === "requests" &&
-                    data.requests.filter((r) => r.status === "pending").length >
-                      0 && (
-                      <span className="session-label">
-                        {
-                          data.requests.filter((r) => r.status === "pending")
-                            .length
-                        }
-                      </span>
-                    )}
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
-          <div style={{ padding: 15, marginTop: 25 }}>
-            <a
-              href="/nhan-nuoi"
-              className="button lime small"
-              style={{ width: "100%" }}
+            <span
+              style={{ fontSize: 12, color: "#bdd0be", padding: "0 20px 20px" }}
             >
-              {isAdmin ? "Xem trang mở bán" : "Nhận nuôi thêm"}
-            </a>
-          </div>
-        </SidebarContent>
-        <SidebarFooter className="sidebar-bottom">
-          <span>{data.actor.name}</span>
-          <span>
-            {data.actor.demo
-              ? "Phiên trải nghiệm riêng"
-              : "Email & điện thoại đã xác thực"}
-          </span>
-          <button
-            onClick={logout}
-            className="actions"
-            style={{ paddingTop: 15 }}
-          >
-            <LogOut size={16} />
-            Đăng xuất
-          </button>
-        </SidebarFooter>
-      </Sidebar>
+              {isAdmin ? "ĐIỀU HÀNH TRANG TRẠI" : "KHÔNG GIAN CỦA BẠN"}
+            </span>
+          </SidebarHeader>
+          <SidebarContent style={{ padding: "0 12px" }}>
+            {isAdmin && (
+              <a
+                href="/cap-nhat"
+                className="button lime"
+                style={{ margin: "0 8px 14px" }}
+              >
+                <Camera size={18} /> Cập nhật nhanh trên điện thoại
+              </a>
+            )}
+            <SidebarMenu>
+              {menus.map(([key, label, Icon]) => (
+                <SidebarMenuItem key={key}>
+                  <SidebarMenuButton
+                    isActive={section === key}
+                    onClick={() => {
+                      setSection(key);
+                      setQuery("");
+                      setStatus("all");
+                    }}
+                    style={{ padding: "23px 13px", fontSize: 14 }}
+                  >
+                    <Icon />
+                    <span>{label}</span>
+                    {key === "requests" &&
+                      data.requests.filter((r) => r.status === "pending")
+                        .length > 0 && (
+                        <span className="session-label">
+                          {
+                            data.requests.filter((r) => r.status === "pending")
+                              .length
+                          }
+                        </span>
+                      )}
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+            <div style={{ padding: 15, marginTop: 25 }}>
+              <a
+                href="/nhan-nuoi"
+                className="button lime small"
+                style={{ width: "100%" }}
+              >
+                {isAdmin ? "Xem trang mở bán" : "Nhận nuôi thêm"}
+              </a>
+            </div>
+          </SidebarContent>
+          <SidebarFooter className="sidebar-bottom">
+            <span>{data.actor.name}</span>
+            <span>
+              {data.actor.demo
+                ? "Phiên trải nghiệm riêng"
+                : "Tài khoản chủ trang trại"}
+            </span>
+            <button
+              onClick={logout}
+              className="actions"
+              style={{ paddingTop: 15 }}
+            >
+              <LogOut size={16} />
+              Đăng xuất
+            </button>
+          </SidebarFooter>
+        </Sidebar>
+      )}
       <SidebarInset>
         <header className="app-topbar">
-          <SidebarTrigger />
+          {isAdmin ? (
+            <SidebarTrigger />
+          ) : (
+            <Link className="brand" href="/">
+              {" "}
+              <Sprout /> M FARM
+            </Link>
+          )}
           <span>
             {isAdmin
               ? "M FARM / Quản trị trang trại"
@@ -1109,6 +1223,31 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
             </span>
           )}
         </header>
+        {!isAdmin && (
+          <nav
+            className="customer-navigation"
+            aria-label="Không gian khách hàng"
+          >
+            {menus.map(([key, label, Icon]) => (
+              <button
+                key={key}
+                aria-current={section === key ? "page" : undefined}
+                onClick={() => {
+                  setSection(key);
+                  setQuery("");
+                  setStatus("all");
+                }}
+              >
+                <Icon size={18} />
+                <span>{label}</span>
+              </button>
+            ))}
+            <button onClick={logout}>
+              <LogOut size={18} />
+              <span>Đăng xuất</span>
+            </button>
+          </nav>
+        )}
         <main className="workspace">
           <div className="workspace-heading">
             <div>
@@ -1287,7 +1426,10 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
                   </section>
                   <section className="panel">
                     <h3>Nhật ký gần đây</h3>
-                    <Logs logs={data.logs.slice(0, 3)} images={data.log_images} />
+                    <Logs
+                      logs={data.logs.slice(0, 3)}
+                      images={data.log_images}
+                    />
                     <button
                       className="text-link"
                       onClick={() => setSection("logs")}
@@ -1317,7 +1459,10 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
                   )}
                   <section className="panel" style={{ marginTop: 25 }}>
                     <h3>Những cập nhật mới nhất</h3>
-                    <Logs logs={data.logs.slice(0, 4)} images={data.log_images} />
+                    <Logs
+                      logs={data.logs.slice(0, 4)}
+                      images={data.log_images}
+                    />
                   </section>
                 </>
               )}
@@ -1699,13 +1844,14 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
           if (!v) setSelectedId(null);
         }}
       >
-        <SheetContent className="w-full overflow-y-auto p-6 sm:max-w-[600px]">
+        <SheetContent className="farm-asset-sheet w-full overflow-y-auto p-6 sm:max-w-[600px]">
           <SheetHeader>
             <SheetTitle>{a?.name}</SheetTitle>
             <SheetDescription>{a?.id} · Hồ sơ theo dõi cá thể</SheetDescription>
           </SheetHeader>
           {a && (
             <>
+              <AssetCover asset={a} images={data.log_images} />
               <div className="actions" style={{ marginTop: 20 }}>
                 <Badge value={a.status} />
                 <Badge value={a.health} />
@@ -1747,7 +1893,9 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
                 <TabsContent value="history">
                   <Logs
                     logs={data.logs.filter((l) => l.asset_id === a.id)}
-                    images={data.log_images.filter((image) => image.asset_id === a.id)}
+                    images={data.log_images.filter(
+                      (image) => image.asset_id === a.id,
+                    )}
                   />
                   {isAdmin && (
                     <button className="button" onClick={() => logForm(a.id)}>
@@ -1762,30 +1910,60 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
                       {data.vaccinations
                         .filter((item) => item.asset_id === a.id)
                         .map((item) => {
-                          const due = item.next_due_at && Date.parse(item.next_due_at) <= Date.now() + 14 * 86400000;
+                          const due =
+                            item.next_due_at &&
+                            Date.parse(item.next_due_at) <=
+                              Date.now() + 14 * 86400000;
                           return (
                             <article key={item.id} className="vaccination-card">
-                              <div className="vaccination-icon"><Syringe size={20} /></div>
+                              <div className="vaccination-icon">
+                                <Syringe size={20} />
+                              </div>
                               <div>
                                 <div className="actions">
                                   <strong>{item.vaccine_name}</strong>
-                                  {due && <span className="badge status-warn">Sắp đến hạn</span>}
+                                  {due && (
+                                    <span className="badge status-warn">
+                                      Sắp đến hạn
+                                    </span>
+                                  )}
                                 </div>
-                                <p>{item.dose_label} · Tiêm ngày {date(item.administered_at)}</p>
-                                {item.next_due_at && <p><strong>Nhắc tiếp:</strong> {date(item.next_due_at)}</p>}
-                                {item.batch_number && <p>Số lô: {item.batch_number}</p>}
-                                {item.provider && <p>Thực hiện: {item.provider}</p>}
-                                {item.note && <p className="muted">{item.note}</p>}
+                                <p>
+                                  {item.dose_label} · Tiêm ngày{" "}
+                                  {date(item.administered_at)}
+                                </p>
+                                {item.next_due_at && (
+                                  <p>
+                                    <strong>Nhắc tiếp:</strong>{" "}
+                                    {date(item.next_due_at)}
+                                  </p>
+                                )}
+                                {item.batch_number && (
+                                  <p>Số lô: {item.batch_number}</p>
+                                )}
+                                {item.provider && (
+                                  <p>Thực hiện: {item.provider}</p>
+                                )}
+                                {item.note && (
+                                  <p className="muted">{item.note}</p>
+                                )}
                               </div>
                             </article>
                           );
                         })}
-                      {!data.vaccinations.some((item) => item.asset_id === a.id) && (
-                        <div className="empty-inline">Chưa có dữ liệu tiêm ngừa.</div>
+                      {!data.vaccinations.some(
+                        (item) => item.asset_id === a.id,
+                      ) && (
+                        <div className="empty-inline">
+                          Chưa có dữ liệu tiêm ngừa.
+                        </div>
                       )}
                     </div>
                     {isAdmin && (
-                      <button className="button" onClick={() => vaccinationForm(a.id)}>
+                      <button
+                        className="button"
+                        onClick={() => vaccinationForm(a.id)}
+                      >
                         <Syringe size={16} /> Ghi nhận mũi tiêm
                       </button>
                     )}
@@ -1798,30 +1976,84 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
                         .filter((item) => item.asset_id === a.id)
                         .map((item) => (
                           <article key={item.id} className="identifier-card">
-                            <div className="identifier-code">{item.visible_code}</div>
+                            <div className="identifier-code">
+                              {item.visible_code}
+                            </div>
                             <div>
-                              <strong>{({ leg_band: "Vòng chân", ear_tag_qr: "Thẻ tai QR", ear_tag_rfid: "Thẻ tai RFID", collar_qr: "Thẻ QR vòng cổ", microchip: "Microchip" } as Record<string,string>)[item.identifier_type] || item.identifier_type}</strong>
-                              <p>{item.placement} · Gắn ngày {date(item.attached_at)}</p>
-                              {item.electronic_code && <p>Mã điện tử: {item.electronic_code}</p>}
-                              <span className={`badge ${item.status === "active" ? "status-good" : "status-neutral"}`}>
-                                {({ active: "Đang sử dụng", lost: "Đã mất", damaged: "Đã hỏng", replaced: "Đã thay", removed: "Đã tháo" } as Record<string,string>)[item.status] || item.status}
+                              <strong>
+                                {(
+                                  {
+                                    leg_band: "Vòng chân",
+                                    ear_tag_qr: "Thẻ tai QR",
+                                    ear_tag_rfid: "Thẻ tai RFID",
+                                    collar_qr: "Thẻ QR vòng cổ",
+                                    microchip: "Microchip",
+                                  } as Record<string, string>
+                                )[item.identifier_type] || item.identifier_type}
+                              </strong>
+                              <p>
+                                {item.placement} · Gắn ngày{" "}
+                                {date(item.attached_at)}
+                              </p>
+                              {item.electronic_code && (
+                                <p>Mã điện tử: {item.electronic_code}</p>
+                              )}
+                              <span
+                                className={`badge ${item.status === "active" ? "status-good" : "status-neutral"}`}
+                              >
+                                {(
+                                  {
+                                    active: "Đang sử dụng",
+                                    lost: "Đã mất",
+                                    damaged: "Đã hỏng",
+                                    replaced: "Đã thay",
+                                    removed: "Đã tháo",
+                                  } as Record<string, string>
+                                )[item.status] || item.status}
                               </span>
-                              {item.note && <p className="muted">{item.note}</p>}
+                              {item.note && (
+                                <p className="muted">{item.note}</p>
+                              )}
                               {isAdmin && item.status === "active" && (
                                 <div className="identifier-actions">
-                                  <button onClick={() => mutate("retireAssetIdentifier", { id: item.id, status: "lost" })}>Báo mất</button>
-                                  <button onClick={() => mutate("retireAssetIdentifier", { id: item.id, status: "replaced" })}>Đã thay</button>
+                                  <button
+                                    onClick={() =>
+                                      mutate("retireAssetIdentifier", {
+                                        id: item.id,
+                                        status: "lost",
+                                      })
+                                    }
+                                  >
+                                    Báo mất
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      mutate("retireAssetIdentifier", {
+                                        id: item.id,
+                                        status: "replaced",
+                                      })
+                                    }
+                                  >
+                                    Đã thay
+                                  </button>
                                 </div>
                               )}
                             </div>
                           </article>
                         ))}
-                      {!data.asset_identifiers.some((item) => item.asset_id === a.id) && (
-                        <div className="empty-inline">Chưa gắn mã định danh.</div>
+                      {!data.asset_identifiers.some(
+                        (item) => item.asset_id === a.id,
+                      ) && (
+                        <div className="empty-inline">
+                          Chưa gắn mã định danh.
+                        </div>
                       )}
                     </div>
                     {isAdmin && (
-                      <button className="button" onClick={() => identifierForm(a.id)}>
+                      <button
+                        className="button"
+                        onClick={() => identifierForm(a.id)}
+                      >
                         <ScanLine size={16} /> Gắn mã định danh
                       </button>
                     )}

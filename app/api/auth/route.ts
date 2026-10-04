@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   authFetch,
+  accountRole,
   authReady,
   body,
   checkOrigin,
@@ -31,7 +32,8 @@ export const GET = (req: Request) =>
         user = refreshed.user || (await authFetch("user", "GET", undefined, token));
       } catch {}
     }
-    const owner = user?.email?.toLowerCase() === (config().OWNER_EMAIL || "").trim().toLowerCase();
+    const role = user?.email_confirmed_at ? await accountRole(user.id,user.email || "") : "customer";
+    const owner = role === "admin";
     const response = json({
       ready: authReady(),
       user: user
@@ -42,6 +44,8 @@ export const GET = (req: Request) =>
             email_verified: !!user.email_confirmed_at,
             phone_verified: !!user.phone_confirmed_at,
             is_owner: owner,
+            is_system_admin: role === "system_admin",
+            role,
           }
         : null,
     });
