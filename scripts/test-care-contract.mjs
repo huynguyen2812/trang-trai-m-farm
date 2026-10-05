@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {createHash,createHmac} from 'node:crypto';
+import ts from 'typescript';
+const source=readFileSync(new URL('../lib/notification-gateway.ts',import.meta.url),'utf8');
+const js=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
+const {submitCareJob,careRequest}=await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'));
+const config={MF_CUSTOMER_CARE_GATEWAY_URL:'http://127.0.0.1:9999',MF_CARE_CLIENT_ID:'test-only',MF_CARE_CLIENT_SECRET:'not-a-real-secret'};
+const job={sourceProduct:'EXTERNAL_CONNECTOR',externalReferenceId:'mfarm:GA-001',eventType:'FARM_ASSET_UPDATE',recipient:{name:'Test',phone:'+84900000000'},templateCode:'MFARM_ASSET_V1',templateVariables:{summary:'Test'},scheduledAt:'2026-10-05T00:00:00.000Z',idempotencyKey:'fixed-key',consentStatus:'GRANTED'};
+const nonces=new Set();let calls=0;
+const sha=s=>createHash('sha256').update(s).digest('hex');
+async function fake(url,options){
+  calls++;const h=options.headers;const raw=options.body||'';
+  assert.equal(url.pathname,'/api/v1/care-jobs');
+  assert.equal(h['x-care-client-id'],'test-only');
+  assert(!nonces.has(h['x-care-nonce']));nonces.add(h['x-care-nonce']);
+  const canonical=[options.method,url.pathname,h['x-care-timestamp'],h['x-care-nonce'],sha(raw)].join('\n');
+  assert.equal(h['x-care-signature'],createHmac('sha256',sha(config.MF_CARE_CLIENT_SECRET)).update(canonical).digest('hex'));
+  assert.deepEqual(JSON.parse(raw),job);assert.equal(options.redirect,'error');
+  assert(!JSON.stringify(h).includes(config.MF_CARE_CLIENT_SECRET));
+  return Response.json({id:'job-001',status:'QUEUED',replay:calls>1});
+}
+assert.deepEqual(await submitCareJob(config,job,fake),{id:'job-001',status:'QUEUED'});
+await submitCareJob(config,job,fake);assert.equal(calls,2);
+assert.deepEqual(await submitCareJob(config,job,async()=>Response.json({status:'OPTED_OUT',accepted:false})),{id:'',status:'OPTED_OUT'});
+await assert.rejects(submitCareJob(config,job,async()=>Response.json({id:'oops'})),e=>e.code==='gateway_response_invalid');
+await assert.rejects(submitCareJob(config,job,async()=>new Response('',{status:409})),e=>e.code==='gateway_http_409'&&!e.retryable);
+await assert.rejects(submitCareJob(config,job,async()=>{throw Error('timeout');}),e=>e.code==='gateway_uncertain'&&e.retryable);
+await assert.rejects(careRequest({...config,MF_CUSTOMER_CARE_GATEWAY_URL:'http://example.com'},'POST','/api/v1/care-jobs',job,fake),e=>e.code==='gateway_url_invalid');
+console.log('PASS care contract: HMAC matches gateway verifier, immutable retry body/fresh nonce, accepted versus sent, opt-out, conflict, malformed response, timeout, URL restrictions. No real network calls.');

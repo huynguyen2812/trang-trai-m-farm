@@ -195,3 +195,71 @@ export const rateLimits = sqliteTable("rate_limits", {
 
 export const accountAccess = sqliteTable("account_access", {tenant:tenant(),user_id:text("user_id").notNull(),role:text("role").notNull(),suspended:integer("suspended").notNull().default(0),updated_at:text("updated_at").notNull()},t=>[primaryKey({columns:[t.tenant,t.user_id]})]);
 export const accessAudit = sqliteTable("access_audit", {tenant:tenant(),id:text("id").notNull(),actor_id:text("actor_id").notNull(),target_id:text("target_id").notNull(),before_state:text("before_state").notNull(),after_state:text("after_state").notNull(),reason:text("reason").notNull(),created_at:text("created_at").notNull()},t=>[primaryKey({columns:[t.tenant,t.id]})]);
+
+/**
+ * Destination references are opaque identifiers owned by the connected CRM.
+ * M FARM deliberately does not copy Zalo cookies, phone numbers or provider
+ * secrets into these tables.
+ */
+export const customerMessageChannels = sqliteTable(
+  "customer_message_channels",
+  {
+    tenant: tenant(),
+    id: text("id").notNull(),
+    customer_id: text("customer_id").notNull(),
+    channel: text("channel").notNull(),
+    provider: text("provider").notNull(),
+    status: text("status").notNull(),
+    account_ref: text("account_ref").notNull(),
+    thread_ref: text("thread_ref").notNull(),
+    consent_source: text("consent_source").notNull(),
+    granted_at: text("granted_at"),
+    withdrawn_at: text("withdrawn_at"),
+    updated_at: text("updated_at").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenant, t.id] }),
+    uniqueIndex("customer_message_channel_target").on(
+      t.tenant,
+      t.customer_id,
+      t.channel,
+      t.provider,
+    ),
+    index("customer_message_channel_customer").on(t.tenant, t.customer_id),
+  ],
+);
+
+export const notificationOutbox = sqliteTable(
+  "notification_outbox",
+  {
+    tenant: tenant(),
+    id: text("id").notNull(),
+    idempotency_key: text("idempotency_key").notNull(),
+    customer_id: text("customer_id").notNull(),
+    asset_id: text("asset_id"),
+    event: text("event").notNull(),
+    channel: text("channel").notNull(),
+    provider: text("provider").notNull(),
+    status: text("status").notNull(),
+    payload: text("payload").notNull(),
+    provider_message_id: text("provider_message_id").notNull(),
+    error_code: text("error_code").notNull(),
+    attempt_count: integer("attempt_count").notNull().default(0),
+    available_at: text("available_at").notNull(),
+    created_at: text("created_at").notNull(),
+    sent_at: text("sent_at"),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenant, t.id] }),
+    uniqueIndex("notification_outbox_idempotency").on(
+      t.tenant,
+      t.idempotency_key,
+    ),
+    index("notification_outbox_status").on(
+      t.tenant,
+      t.status,
+      t.available_at,
+    ),
+    index("notification_outbox_customer").on(t.tenant, t.customer_id),
+  ],
+);

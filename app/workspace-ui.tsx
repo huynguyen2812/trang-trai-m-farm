@@ -27,6 +27,9 @@ import {
   Camera,
   X,
   Syringe,
+  MessageSquare,
+  Send,
+  RefreshCw,
 } from "lucide-react";
 import {
   Sidebar,
@@ -103,6 +106,40 @@ type FormSpec = {
   action: string;
   values: Record<string, any>;
   fields: Field[];
+};
+type NotificationView = {
+  settings: {
+    mode: string;
+    gatewayConfigured: boolean;
+    zns: string;
+  };
+  channels: {
+    id: string;
+    customer_id: string;
+    channel: string;
+    provider: string;
+    status: string;
+    account_ref: string;
+    thread_ref: string;
+    consent_source: string;
+    updated_at: string;
+  }[];
+  deliveries: {
+    id: string;
+    idempotency_key: string;
+    customer_id: string;
+    asset_id: string | null;
+    event: string;
+    channel: string;
+    provider: string;
+    status: string;
+    provider_message_id: string;
+    error_code: string;
+    attempt_count: number;
+    available_at: string;
+    created_at: string;
+    sent_at: string | null;
+  }[];
 };
 const healthOptions: [string, string][] = [
   ["healthy", "Khỏe mạnh"],
@@ -404,6 +441,11 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
   const [form, setForm] = useState<FormSpec | null>(null);
   const [busy, setBusy] = useState(false);
   const [orderDetail, setOrderDetail] = useState<Order | null>(null);
+  const [notifications, setNotifications] = useState<NotificationView | null>(
+    null,
+  );
+  const [notificationBusy, setNotificationBusy] = useState(false);
+  const isAdmin = mode === "admin";
   const reload = useCallback(async () => {
     const d = await api("/api/app");
     setData(d);
@@ -419,6 +461,15 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, [reload]);
+  const reloadNotifications = useCallback(async () => {
+    const result = (await api("/api/notifications")) as NotificationView;
+    setNotifications(result);
+    return result;
+  }, []);
+  useEffect(() => {
+    if (!isAdmin || section !== "notifications") return;
+    reloadNotifications().catch((e) => toast.error(e.message));
+  }, [isAdmin, section, reloadNotifications]);
   useEffect(() => {
     const context = (document as any).modelContext;
     if (!context?.registerTool) return;
@@ -455,7 +506,6 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
     ).catch(() => {});
     return () => control.abort();
   }, [data]);
-  const isAdmin = mode === "admin";
   const a = data?.assets.find((a) => a.id === selectedId);
   const customerName = (id: string | null) =>
     data?.customers.find((c) => c.id === id)?.name || "Chưa phân bổ";
@@ -501,6 +551,12 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
         const result: any = await response.json();
         if (!response.ok)
           throw new Error(result.error || "Không thể lưu cập nhật.");
+      } else if (action === "setNotificationChannel") {
+        await api("/api/notifications", {
+          action: "setChannel",
+          data: values,
+        });
+        await reloadNotifications();
       } else if (action === "saveAsset") {
         const { images = [], ...assetValues } = values as {
           images?: File[];
@@ -847,6 +903,75 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
       ],
     });
   }
+  function notificationChannel(customerId: string) {
+    return notifications?.channels.find(
+      (channel) => channel.customer_id === customerId && channel.channel === "zalo_crm",
+    );
+  }
+  function notificationForm(customerId?: string) {
+    const channel = customerId ? notificationChannel(customerId) : undefined;
+    setForm({
+      title: "Kết nối nhận tin cho khách hàng",
+      description:
+        "Gateway dùng số điện thoại đã xác thực để tìm bạn bè hoặc cuộc trò chuyện có sẵn. Tài khoản gửi được quản lý trong gateway.",
+      action: "setNotificationChannel",
+      values: {
+        customer_id: customerId || "",
+        channel: "zalo_crm",
+        status: channel?.status || "unknown",
+        account_ref: "",
+        thread_ref: "",
+        consent_source: channel?.consent_source || "owner_manual",
+      },
+      fields: [
+        {
+          key: "customer_id",
+          label: "Khách hàng",
+          type: "select",
+          options: data?.customers.map((item) => [item.id, item.name]),
+          disabled: !!customerId,
+        },
+        {
+          key: "status",
+          label: "Quyền nhận tin",
+          type: "select",
+          options: [
+            ["unknown", "Chưa có đồng ý / chưa kết nối"],
+            ["granted", "Đã đồng ý nhận tin"],
+            ["withdrawn", "Đã rút đồng ý"],
+          ],
+        },
+        {
+          key: "consent_source",
+          label: "Nguồn đồng ý",
+          required: false,
+          wide: true,
+        },
+      ],
+    });
+  }
+  async function notificationAction(action: "queueWeekly" | "process") {
+    setNotificationBusy(true);
+    try {
+      const result = await api("/api/notifications", {
+        action,
+        ...(action === "process" ? { limit: 20 } : {}),
+      });
+      await reloadNotifications();
+      if (action === "queueWeekly")
+        toast.success(
+          `Đã xếp ${result.queued || 0} bản tin tuần; bỏ qua ${result.skipped || 0} khách chưa đủ điều kiện.`,
+        );
+      else
+        toast.success(
+          `Mô phỏng: ${result.sent || 0} tin, ${result.skipped || 0} bị chặn, ${result.failed || 0} lỗi. Chưa gửi Zalo thật.`,
+        );
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setNotificationBusy(false);
+    }
+  }
   function allocate() {
     setForm({
       title: "Phân bổ tài sản cho khách",
@@ -984,6 +1109,7 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
         ["overview", "Tổng quan", LayoutDashboard],
         ["assets", "Cây & vật nuôi", Sprout],
         ["customers", "Khách hàng", Users],
+        ["notifications", "Chăm sóc khách", MessageSquare],
         ["packages", "Giá & gói chăm sóc", Tag],
         ["orders", "Đơn hàng", ShoppingBag],
         ["logs", "Nhật ký chăm sóc", BookOpen],
@@ -1001,6 +1127,7 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
         overview: "Hôm nay ở trang trại",
         assets: "Cây & vật nuôi",
         customers: "Khách hàng của M FARM",
+        notifications: "Cập nhật cho khách hàng",
         packages: "Giá & gói chăm sóc",
         orders: "Đơn hàng & phân bổ",
         logs: "Nhật ký chăm sóc",
@@ -1560,6 +1687,40 @@ export function Workspace({ mode }: { mode: "admin" | "customer" }) {
                   Chưa có gói. Thêm gói đầu tiên để mở bán.
                 </div>
               )}
+            </>
+          )}
+          {section === "notifications" && isAdmin && (
+            <>
+              <div className="notice">Tin được xếp hàng khi cập nhật cây/con hoặc tạo bản tin tuần. Bản trải nghiệm chỉ mô phỏng, không gửi Zalo thật. ZNS đang chờ tích hợp.</div>
+              <div className="actions" style={{ flexWrap: "wrap", marginBottom: 20 }}>
+                <button className="button" onClick={() => notificationForm()}><Plus size={16} /> Kết nối khách nhận tin</button>
+                <button className="button outline" disabled={notificationBusy} onClick={() => notificationAction("queueWeekly")}><MessageSquare size={16} /> Tạo bản tin tuần</button>
+                <button className="button outline" disabled={notificationBusy || notifications?.settings.mode !== "mock"} onClick={() => notificationAction("process")}><Send size={16} /> Mô phỏng xử lý</button>
+                <button className="button outline" onClick={() => reloadNotifications().catch(e => toast.error(e.message))}><RefreshCw size={16} /> Làm mới</button>
+              </div>
+              <section className="panel">
+                <h3>Khách nhận tin</h3>
+                <p className="muted">Chỉ ghi nhận đã đồng ý khi khách thực sự chấp thuận nhận cập nhật. Gateway tự định tuyến tài khoản gửi.</p>
+                {data.customers.map(c => {
+                  const channel = notificationChannel(c.id);
+                  return <div key={c.id} className="section-heading" style={{ flexWrap: "wrap", gap: 12, padding: "16px 0" }}>
+                    <div><strong>{c.name}</strong><p className="muted">{channel?.status === "granted" ? "Đã đồng ý" : channel?.status === "withdrawn" ? "Đã ngừng nhận tin" : "Chưa kết nối"} · {c.phone_verified ? "Điện thoại đã xác thực" : "Chưa xác thực điện thoại"}</p></div>
+                    <button className="button small outline" onClick={() => notificationForm(c.id)}>Thiết lập nhận tin</button>
+                  </div>;
+                })}
+              </section>
+              <section className="panel" style={{ marginTop: 20, overflowX: "auto" }}>
+                <h3>100 tin gần nhất</h3>
+                <Table><TableHeader><TableRow>{["Khách", "Nội dung", "Trạng thái", "Ngày tạo"].map(x => <TableHead key={x}>{x}</TableHead>)}</TableRow></TableHeader>
+                  <TableBody>{notifications?.deliveries.map(item => <TableRow key={item.id}>
+                    <TableCell>{customerName(item.customer_id)}</TableCell>
+                    <TableCell>{item.event === "weekly_farm_update" ? "Bản tin tuần" : "Cập nhật cây/con"}<div className="muted">{item.asset_id || "Tổng hợp"}</div></TableCell>
+                    <TableCell>{{ gateway_queued: "Gateway đã nhận, chờ gửi", queued: "Chờ xử lý", sending: "Đang xử lý", simulated: "Đã mô phỏng", sent: "Đã gửi", cancelled: "Đã chặn: điều kiện thay đổi", failed: "Lỗi xử lý" }[item.status] || item.status}<div className="muted">{item.error_code}</div></TableCell>
+                    <TableCell>{date(item.created_at)}</TableCell>
+                  </TableRow>)}</TableBody>
+                </Table>
+                {!notifications?.deliveries.length && <p className="empty-inline">Chưa có tin trong hàng đợi.</p>}
+              </section>
             </>
           )}
           {section === "customers" && isAdmin && (

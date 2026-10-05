@@ -14,6 +14,7 @@ import {
   safe,
   statement,
 } from "@/lib/server";
+import { queueAssetUpdate } from "@/lib/notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -144,5 +145,17 @@ export const POST = (req: Request) =>
       await Promise.allSettled(uploaded.map((key) => media().delete(key)));
       throw error;
     }
-    return json({ id: logId, imageCount: imageRows.length }, 201);
+    // The farm update is placed in the outbox only when the customer has an
+    // explicitly granted channel. Sending itself is handled by the gateway
+    // worker, so saving a photo never waits on Zalo or exposes provider keys.
+    const notification = await queueAssetUpdate(
+      a.tenant,
+      assetId,
+      logId,
+      "asset_update",
+    ).catch(() => ({ queued: 0, skipped: 1, reason: "queue_unavailable" }));
+    return json(
+      { id: logId, imageCount: imageRows.length, notification },
+      201,
+    );
   });
